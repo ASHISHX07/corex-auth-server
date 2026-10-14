@@ -1,0 +1,24 @@
+{
+  "name": "corex-auth-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ASHISHX07/corex-auth-server.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/ASHISHX07/corex-auth-server/issues"
+  },
+  "homepage": "https://github.com/ASHISHX07/corex-auth-server#readme",
+  "dependencies": {
+    "express": "^5.3.0"
+  }
+}
