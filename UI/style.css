@@ -12,13 +12,14 @@
 }
 
 body {
-    background-color: rgb(20, 20, 20);
-    height: 100%;
-    width: 100%;
+    background-color: rgb(10, 10, 10);
+    height: 100dvh;
+    width: 100dvw;
     display: flex;
+    flex-direction: column;
     justify-content: center;
-    align-items:  center;
-    padding: 0.5rem 0.3rem 0 0.3rem;
+    align-items: center;
+    padding: 0.4rem 0.3rem 0.4rem 0.3rem;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
@@ -28,12 +29,14 @@ body {
 .navbar {
     display: flex;
     align-items: center;
+    position: relative;
     width: 100%;
     height: 2rem;
-    background-color: rgb(82, 82, 82);
-    border-radius: 0.5rem;
+    background-color: rgb(50, 50, 50);
+    border-radius: 0.3rem;
     padding: 0 0.4rem;
     overflow: hidden;
+    margin-bottom: 0.4rem;
 }
 
 .navbar-left {
@@ -80,18 +83,12 @@ body {
         padding: 0 0.5rem;
         align-items: center;
         justify-content: center;
+        border-radius: 0.2rem;
 
         &:hover {
-            
+            transition: all 200ms;
+            background-color: rgba(1, 1, 1, 0.2);
         }
-
-        /* div {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-            width: 100%;
-        } */
     }
 }
 
@@ -104,6 +101,20 @@ body {
     position: relative;
     font-size: 0.90rem;
 
+    .username-box
+    {
+        display: flex;
+        height: 75%;
+        width: fit-content;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0 0.3rem 0 0.3rem;
+        background-color: rgba(240, 240, 240, 0.1);
+        border-radius: 0.3rem;
+        overflow: hidden;
+    }
+
     a {
         display: flex;
         height: 100%;
@@ -114,6 +125,29 @@ body {
         img {
             height: 75%;
             width: 100%;
+            margin-left: 0.5rem;
         }
+    }
+}
+
+.main-box {
+    display: flex;
+    flex-direction: row;
+    position: relative;
+    height: 100%;
+    width: 100%;
+    /* border: 0.08rem solid rgb(51, 127, 48); */
+    /* border-radius: 0.3rem;
+    box-shadow: 0 0 0 0.08rem rgb(51, 127, 48); */
+    padding: 0.2rem;
+
+    .activity-box {
+        display: flex;
+        height: 20%;
+        width: 30%;
+        background-color: rgb(25 25 25);
+        border-radius: 0.4rem;
+        /* border-bottom: 0.01rem solid rgb(51, 127, 48);
+        border-right: 0.01rem solid rgb(51, 127, 48); */
     }
 }

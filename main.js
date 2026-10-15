@@ -10,7 +10,7 @@ const options = express.json({
 });
 
 app.disable("x-powered-by");
-app.use(options)
+app.use(options);
 
 
 app.get("/", (_req, res) => {
@@ -24,7 +24,14 @@ app.get("/api/health", (_req, res) => {
     res.status(200).json({
         healthy: true,
         timestamp: new Date().toLocaleString()
-    })
+    });
+});
+
+app.get("/api/auth/getAuthCode", (_req, res) => {
+    res.status(200).json({
+        status: "ok",
+        auth_code: "423hjkb563256jhb32546by453gjhk3b425"
+    });
 });
 
 app.listen(3000);
