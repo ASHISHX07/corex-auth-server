@@ -1,0 +1,119 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: "Inter", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 500;
+    font-style: normal;
+    color: rgb(210, 210, 210);
+}
+
+body {
+    background-color: rgb(20, 20, 20);
+    height: 100%;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items:  center;
+    padding: 0.5rem 0.3rem 0 0.3rem;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.navbar {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 2rem;
+    background-color: rgb(82, 82, 82);
+    border-radius: 0.5rem;
+    padding: 0 0.4rem;
+    overflow: hidden;
+}
+
+.navbar-left {
+    justify-content: start;
+    align-items: center;
+    display: flex;
+    height: 100%;
+    width: 20%;
+
+    .nav-logo {
+        display: flex;
+        height: 3.8rem;
+        object-fit: cover;
+        position: relative;
+        cursor: pointer;
+    }
+
+    .nav-logo-title {
+        display: flex;
+        font-size: 1rem;
+        letter-spacing: 0.05rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+}
+
+.navbar-center {
+    display: flex;
+    height: 100%;
+    width: 60%;
+    justify-content: space-evenly;
+    align-items: center;
+    position: relative;
+    font-size: 0.80rem;
+    padding: 0 10rem;
+    letter-spacing: 2%;
+
+    a {
+        font-style: normal;
+        text-decoration-line: none;
+        display: flex;
+        height: 75%;
+        width: min-content;
+        padding: 0 0.5rem;
+        align-items: center;
+        justify-content: center;
+
+        &:hover {
+            
+        }
+
+        /* div {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            width: 100%;
+        } */
+    }
+}
+
+.navbar-right {
+    display: flex;
+    height: 100%;
+    width: 20%;
+    justify-content: end;
+    align-items: center;
+    position: relative;
+    font-size: 0.90rem;
+
+    a {
+        display: flex;
+        height: 100%;
+        width: 2.5rem;
+        justify-content: center;
+        align-items: center;
+
+        img {
+            height: 75%;
+            width: 100%;
+        }
+    }
+}

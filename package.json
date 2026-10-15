@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node main.js"
+    "start": "node main.js",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
   },
   "repository": {
     "type": "git",
@@ -19,6 +21,7 @@
   },
   "homepage": "https://github.com/ASHISHX07/corex-auth-server#readme",
   "dependencies": {
+    "cloudflare": "^7.3.0",
     "express": "^5.3.0"
   },
   "devDependencies": {

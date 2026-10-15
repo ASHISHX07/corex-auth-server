@@ -1,0 +1,5 @@
+{
+    "limit": "16kb",
+    "strict": true,
+    "type": "application/json"
+}

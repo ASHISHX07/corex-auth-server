@@ -1,0 +1,12 @@
+{
+    "$schema": "./node_modules/wrangler/config-schema.json",
+    "name": "corex-auth-server",
+    "main": "main.js",
+    "compatibility_date": "2026-10-15",
+    "compatibility_flags": [
+        "nodejs_compat"
+    ],
+    "rules": [
+        { "type": "ESModule", "globs": ["**/*.js"] }
+    ]
+}
