@@ -8,5 +8,13 @@
     ],
     "rules": [
         { "type": "ESModule", "globs": ["**/*.js"] }
-    ]
+    ],
+    "assets": {
+        "directory": "./public",
+        "binding": "ASSETS",
+        "run_worker_first": [
+            "/api/*",
+            "/auth/*"
+        ]
+    }
 }
