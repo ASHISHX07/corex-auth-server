@@ -29,7 +29,7 @@ body {
 .navbar {
     display: flex;
     align-items: center;
-    position: relative;
+    position: sticky;
     width: 100%;
     height: 2rem;
     background-color: rgb(50, 50, 50);
@@ -45,6 +45,7 @@ body {
     display: flex;
     height: 100%;
     width: 20%;
+    position: relative;
 
     .nav-logo {
         display: flex;
@@ -139,15 +140,113 @@ body {
     /* border: 0.08rem solid rgb(51, 127, 48); */
     /* border-radius: 0.3rem;
     box-shadow: 0 0 0 0.08rem rgb(51, 127, 48); */
-    padding: 0.2rem;
+    /* padding: 0.2rem; */
 
-    .activity-box {
+    .left-box {
         display: flex;
-        height: 20%;
+        flex-direction: column;
+        height: 100%;
         width: 30%;
+        position: relative;
+
+        .activity-box {
+            display: flex;
+            height: 25%;
+            width: 100%;
+            background-color: rgb(25 25 25);
+            border-radius: 0.4rem;
+            box-shadow: 0 0 0 0.04rem rgb(77, 77, 77);
+            /* border-right: 0.01rem solid rgb(77, 77, 77); */
+        }
+
+        .horizontal-seprator-line {
+            display: flex;
+            width: 100%;
+            height: 0.1rem;
+            margin: 0.2rem;
+            position: relative;
+        }
+
+        .services-box {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background-color: rgb(25 25 25);
+            border-radius: 0.4rem;
+            box-shadow: 0 0 0 0.04rem rgb(77, 77, 77);
+        }
+    }
+
+    .vertical-seprator-line {
+        display: flex;
+        position: relative;
+        height: 100%;
+        width: 0.01rem;
+        /* background-color: rgb(77, 77, 77); */
+        margin: 0 0.2rem;
+    }
+
+    .recent-view-box {
+        position: relative;
+        display: flex;
+        height: 100%;
+        width: 70%;
         background-color: rgb(25 25 25);
         border-radius: 0.4rem;
-        /* border-bottom: 0.01rem solid rgb(51, 127, 48);
-        border-right: 0.01rem solid rgb(51, 127, 48); */
+        box-shadow: 0 0 0 0.04rem rgb(77, 77, 77);
+        padding: 0.05rem 0.5rem;
+
+        .recent-table-main {
+            display: flex;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            font-size: 0.75rem;
+
+            .recent-table-head-row {
+                display: flex;
+                height: 1.5rem;
+                align-items: center;
+
+                .recent-table-client-id-col {
+                    display: flex;
+                    position: inherit;
+                    width: 18rem;
+                }
+
+                .recent-table-broker-col {
+                    display: flex;
+                    position: inherit;
+                    width: 6rem;
+                    border-left: 1px solid rgb(192, 192, 192);
+                    padding-left: 0.3rem;
+                }
+
+                .recent-table-timestamp-col {
+                    display: flex;
+                    position: inherit;
+                    width: 10rem;
+                    border-left: 1px solid rgb(192, 192, 192);
+                    padding-left: 0.3rem;
+                }
+
+                .recent-table-status-col {
+                    display: flex;
+                    position: inherit;
+                    width: 5rem;
+                    border-left: 1px solid rgb(192, 192, 192);
+                    padding-left: 0.3rem;
+                }
+
+                .recent-table-response-col {
+                    display: flex;
+                    position: inherit;
+                    width: 5rem;
+                    border-left: 1px solid rgb(192, 192, 192);
+                    padding-left: 0.3rem;
+                }
+            }
+        }
     }
 }
