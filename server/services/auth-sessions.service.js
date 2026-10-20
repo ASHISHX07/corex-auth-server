@@ -114,6 +114,13 @@ async function receiveAuthCode(env, { broker, code, state }) {
                 AND state_hash = ?
                 AND status = 'pending'
                 AND expires_at > ?
+                AND EXISTS (
+                    SELECT 1
+                    FROM corex_clients AS client
+                    WHERE client.corex_client_id =
+                          auth_sessions.corex_client_id
+                      AND client.status = 'active'
+                )
         `)
         .bind(code, now, broker, stateHash, now)
         .run();
@@ -173,34 +180,41 @@ async function getAuthSessionResult(env, { sessionId, retrievalSecret }) {
 
     const findSession = () => env.DB
         .prepare(`
-            SELECT status, expires_at, failure_code
-            FROM auth_sessions
-            WHERE session_id = ?
-              AND retrieval_secret_hash = ?
+            SELECT
+                s.status,
+                s.expires_at,
+                s.failure_code,
+                c.status AS client_status
+            FROM auth_sessions AS s
+            LEFT JOIN corex_clients AS c
+                ON c.corex_client_id = s.corex_client_id
+            WHERE s.session_id = ?
+                AND s.retrieval_secret_hash = ?
         `)
         .bind(sessionId, secretHash)
         .first();
 
-    const expireSession = () => {
-        const now = Math.floor(Date.now() / 1000);
-
-        return env.DB
+    const expireSession = (reason = "session_expired") =>
+        env.DB
             .prepare(`
                 UPDATE auth_sessions
                 SET
                     status = 'expired',
                     authorization_code = NULL,
-                    failure_code = 'session_expired'
+                    failure_code = ?
                 WHERE session_id = ?
                     AND retrieval_secret_hash = ?
                     AND status IN ('pending', 'code_received')
-                    AND expires_at <= ?
             `)
-            .bind(sessionId, secretHash, now)
+            .bind(reason, sessionId, secretHash)
             .run();
-    };
 
     let session = await findSession();
+
+    if (session.client_status !== "active") {
+        await expireSession("client_revoked");
+        return { status: "expired" };
+    }
 
     if (!session) {
         return { status: "not_found" };
@@ -212,7 +226,7 @@ async function getAuthSessionResult(env, { sessionId, retrievalSecret }) {
         ["pending", "code_received"].includes(session.status) &&
         session.expires_at <= now
     ) {
-        await expireSession();
+        await expireSession("session_expired");
         session = await findSession();
 
         if (!session) {

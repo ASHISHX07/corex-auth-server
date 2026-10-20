@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { createAuthSession, getAuthSessionResult } from "../services/auth-sessions.service.js";
 import { requireCorexClient } from "../middleware/require-corex-client.js";
+import { limitSessionCreation } from "../middleware/rate-limits.js";
 
 export default function createAuthRouter(env) {
     const router = Router();
 
-    router.post("/sessions", requireCorexClient(env), async (req, res) => {
+    router.post("/sessions", requireCorexClient(env), limitSessionCreation(env), async (req, res) => {
         const broker = req.body?.broker;
         const appId = req.body?.appId;
 

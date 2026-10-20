@@ -29,5 +29,23 @@
 			"migrations_dir": "db/migrations",
 			"database_id": "95587b10-6f24-43be-acd8-71869a4fa55d"
 		}
+	],
+	"ratelimits": [
+		{
+			"name": "AUTH_SESSION_LIMITER",
+			"namespace_id": "68420101",
+			"simple": {
+				"limit": 10,
+				"period": 60
+			}
+		},
+		{
+			"name": "UPSTOX_CALLBACK_LIMITER",
+			"namespace_id": "68420102",
+			"simple": {
+				"limit": 120,
+				"period": 60
+			}
+		}
 	]
 }

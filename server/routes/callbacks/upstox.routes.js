@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { receiveAuthCode, failAuthSession } from "../../services/auth-sessions.service.js";
+import { limitUpstoxCallbacks } from "../../middleware/rate-limits.js";
 
 function protectResponse(res) {
     res.set({
@@ -60,7 +61,7 @@ function redirectToCompletion(res, status) {
 function createUpstoxCallbackRouter(env) {
     const router = Router();
 
-    router.get("/callback", async (req, res) => {
+    router.get("/callback", limitUpstoxCallbacks(env), async (req, res) => {
         const { code, state, error } = req.query;
 
         try {
