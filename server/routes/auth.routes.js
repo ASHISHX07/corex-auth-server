@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { createAuthSession, getAuthSessionResult } from "../services/auth-sessions.service.js";
+import { requireCorexClient } from "../middleware/require-corex-client.js";
 
 export default function createAuthRouter(env) {
     const router = Router();
 
-    router.post("/sessions", async (req, res) => {
+    router.post("/sessions", requireCorexClient(env), async (req, res) => {
         const broker = req.body?.broker;
         const appId = req.body?.appId;
 
@@ -23,7 +24,8 @@ export default function createAuthRouter(env) {
         try {
             const session = await createAuthSession(env, {
                 broker: broker.trim().toLowerCase(),
-                appId: appId.trim()
+                appId: appId.trim(),
+                corexClientId: req.corexClient.id
             });
 
             return res.status(201).json(session);

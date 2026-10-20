@@ -1,4 +1,5 @@
 import { getProvider } from "../providers/provider-registry.js";
+import { sha256Hex } from "../security/crypto.js";
 
 function randomBase64Url(byteLength = 32) {
     const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
@@ -15,16 +16,7 @@ function randomBase64Url(byteLength = 32) {
         .replace(/=+$/g, "");
 }
 
-async function sha256Hex(value) {
-    const bytes = new TextEncoder().encode(value);
-    const digest = await crypto.subtle.digest("SHA-256", bytes);
-
-    return Array.from(new Uint8Array(digest))
-        .map(byte => byte.toString(16).padStart(2, "0"))
-        .join("");
-}
-
-async function createAuthSession(env, { broker, appId }) {
+async function createAuthSession(env, { broker, appId, corexClientId }) {
     if (!env.DB) {
         throw new Error("Database binding is missing");
     }
@@ -54,6 +46,7 @@ async function createAuthSession(env, { broker, appId }) {
         .prepare(`
             INSERT INTO auth_sessions (
                 session_id,
+                corex_client_id,
                 broker,
                 provider_app_id,
                 state_hash,
@@ -62,10 +55,11 @@ async function createAuthSession(env, { broker, appId }) {
                 created_at,
                 expires_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .bind(
             sessionId,
+            corexClientId,
             broker,
             appId,
             stateHash,
