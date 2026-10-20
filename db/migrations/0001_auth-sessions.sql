@@ -2,7 +2,10 @@
 CREATE TABLE auth_sessions (
     session_id TEXT PRIMARY KEY,
 
-    client_id TEXT NOT NULL,
+    broker TEXT NOT NULL
+        CHECK (broker IN ('upstox', 'zerodha', 'fyers')),
+
+    provider_app_id TEXT NOT NULL,
 
     state_hash TEXT NOT NULL UNIQUE,
     retrieval_secret_hash TEXT NOT NULL,
