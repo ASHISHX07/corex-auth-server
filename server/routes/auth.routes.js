@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createAuthSession } from "../services/auth-sessions.service.js";
+import { createAuthSession, getAuthSessionResult } from "../services/auth-sessions.service.js";
 
 export default function createAuthRouter(env) {
     const router = Router();
@@ -42,6 +42,56 @@ export default function createAuthRouter(env) {
 
             return res.status(500).json({
                 error: "session_creation_failed"
+            });
+        }
+    });
+
+    router.get("/sessions/:sessionId/result", async (req, res) => {
+        const authorization = req.get("authorization") ?? "";
+        const match = /^Bearer ([A-Za-z0-9_-]{40,100})$/.exec(authorization);
+    
+        if (!match) {
+            return res.status(401).json({
+                error: "missing_retrieval_credential"
+            });
+        }
+    
+        try {
+            const result = await getAuthSessionResult(env, {
+                sessionId: req.params.sessionId,
+                retrievalSecret: match[1]
+            });
+    
+            switch (result.status) {
+                case "not_found":
+                    return res.status(404).json({
+                        error: "session_not_found"
+                    });
+    
+                case "pending":
+                    return res.status(202).json(result);
+    
+                case "completed":
+                    return res.status(200).json(result);
+    
+                case "failed":
+                    return res.status(409).json(result);
+    
+                case "expired":
+                case "already_retrieved":
+                    return res.status(410).json(result);
+    
+                default:
+                    return res.status(409).json(result);
+            }
+        } catch (error) {
+            console.error(
+                "Result retrieval failed:",
+                error instanceof Error ? error.message : "Unknown error"
+            );
+    
+            return res.status(500).json({
+                error: "result_retrieval_failed"
             });
         }
     });

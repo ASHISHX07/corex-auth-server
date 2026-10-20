@@ -164,4 +164,162 @@ async function failAuthSession(
     return result.success && result.meta.changes === 1;
 }
 
-export { createAuthSession, receiveAuthCode, failAuthSession };
+async function getAuthSessionResult(env, { sessionId, retrievalSecret }) {
+    if (
+        typeof sessionId !== "string" ||
+        sessionId.length > 100 ||
+        typeof retrievalSecret !== "string" ||
+        retrievalSecret.length < 40 ||
+        retrievalSecret.length > 100
+    ) {
+        return { status: "not_found" };
+    }
+
+    const secretHash = await sha256Hex(retrievalSecret);
+
+    const findSession = () => env.DB
+        .prepare(`
+            SELECT status, expires_at, failure_code
+            FROM auth_sessions
+            WHERE session_id = ?
+              AND retrieval_secret_hash = ?
+        `)
+        .bind(sessionId, secretHash)
+        .first();
+
+    const expireSession = () => {
+        const now = Math.floor(Date.now() / 1000);
+
+        return env.DB
+            .prepare(`
+                UPDATE auth_sessions
+                SET
+                    status = 'expired',
+                    authorization_code = NULL,
+                    failure_code = 'session_expired'
+                WHERE session_id = ?
+                    AND retrieval_secret_hash = ?
+                    AND status IN ('pending', 'code_received')
+                    AND expires_at <= ?
+            `)
+            .bind(sessionId, secretHash, now)
+            .run();
+    };
+
+    let session = await findSession();
+
+    if (!session) {
+        return { status: "not_found" };
+    }
+
+    let now = Math.floor(Date.now() / 1000);
+
+    if (
+        ["pending", "code_received"].includes(session.status) &&
+        session.expires_at <= now
+    ) {
+        await expireSession();
+        session = await findSession();
+
+        if (!session) {
+            return { status: "not_found" };
+        }
+    }
+
+    if (session.status === "pending") {
+        return {
+            status: "pending",
+            expiresAt: new Date(
+                session.expires_at * 1000
+            ).toISOString()
+        };
+    }
+
+    if (session.status === "failed") {
+        return {
+            status: "failed",
+            error: session.failure_code ?? "authorization_failed"
+        };
+    }
+
+    if (session.status === "expired") {
+        return { status: "expired" };
+    }
+
+    if (session.status === "retrieved") {
+        return { status: "already_retrieved" };
+    }
+
+    if (session.status !== "code_received") {
+        return { status: "unavailable" };
+    }
+
+    now = Math.floor(Date.now() / 1000);
+
+    // Claim the code and clear it in one D1 batch transaction.
+    const results = await env.DB.batch([
+        env.DB.prepare(`
+            UPDATE auth_sessions
+            SET
+                status = 'retrieved',
+                code_retrieved_at = ?
+            WHERE session_id = ?
+            AND retrieval_secret_hash = ?
+            AND status = 'code_received'
+            AND expires_at > ?
+            RETURNING authorization_code
+        `).bind(now, sessionId, secretHash, now),
+
+        env.DB.prepare(`
+            UPDATE auth_sessions
+            SET authorization_code = NULL
+            WHERE session_id = ?
+            AND status = 'retrieved'
+        `).bind(sessionId)
+    ]);
+
+    const claimedCode = results[0]?.results?.[0]?.authorization_code;
+
+    if (
+        typeof claimedCode === "string" &&
+        claimedCode.length > 0
+    ) {
+        return {
+            status: "completed",
+            authorizationCode: claimedCode
+        };
+    }
+
+    // Another request may have claimed the code first.
+    session = await findSession();
+
+    if (!session) {
+        return { status: "not_found" };
+    }
+
+    now = Math.floor(Date.now() / 1000);
+
+    if (
+        ["pending", "code_received"].includes(session.status) &&
+        session.expires_at <= now
+    ) {
+        await expireSession();
+        session = await findSession();
+
+        if (!session) {
+            return { status: "not_found" };
+        }
+    }
+
+    if (session.status === "retrieved") {
+        return { status: "already_retrieved" };
+    }
+
+    if (session.status === "expired") {
+        return { status: "expired" };
+    }
+
+    return { status: session.status };
+}
+
+export { createAuthSession, receiveAuthCode, failAuthSession, getAuthSessionResult };
