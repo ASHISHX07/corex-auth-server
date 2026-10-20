@@ -1,9 +1,7 @@
 import { Router } from "express";
 import { receiveAuthCode, failAuthSession } from "../../services/auth-sessions.service.js";
 
-const router = Router();
-
-function protectCallbackResponse(res) {
+function protectResponse(res) {
     res.set({
         "Cache-Control": "no-store",
         "Referrer-Policy": "no-referrer",
@@ -86,7 +84,7 @@ function createUpstoxCallbackRouter(env) {
                 return redirectToCompletion(res, "invalid");
             }
 
-            const accepted = await receiveAuthorizationCode(env, {
+            const accepted = await receiveAuthCode(env, {
                 broker: "upstox",
                 code,
                 state
