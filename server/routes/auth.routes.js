@@ -5,7 +5,7 @@ export default function createAuthRouter(env) {
     const router = Router();
 
     router.post("/sessions", async (req, res) => {
-        const clientId = req.body?.clientId;
+        const broker = req.body?.broker;
         const appId = req.body?.appId;
 
         if (
@@ -34,6 +34,11 @@ export default function createAuthRouter(env) {
                     error: "unsupported_broker"
                 });
             }
+
+            console.error(
+                "Session creation failed:",
+                error instanceof Error ? error.message : "Unknown error"
+            );
 
             return res.status(500).json({
                 error: "session_creation_failed"
