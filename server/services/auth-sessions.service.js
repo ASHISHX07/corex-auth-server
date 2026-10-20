@@ -95,4 +95,73 @@ async function createAuthSession(env, { broker, appId }) {
     };
 }
 
-export { createAuthSession };
+async function receiveAuthCode(env, { broker, code, state }) {
+    if (
+        typeof code !== "string" ||
+        code.length === 0 ||
+        code.length > 2048 ||
+        typeof state !== "string" ||
+        state.length === 0 ||
+        state.length > 1024
+    ) return false;
+
+    const stateHash = await sha256Hex(state);
+    const now = Math.floor(Date.now() / 1000);
+
+    const result = await env.DB
+        .prepare(`
+            UPDATE auth_sessions
+            SET
+                authorization_code = ?,
+                status = 'code_received',
+                callback_received_at = ?
+            WHERE
+                broker = ?
+                AND state_hash = ?
+                AND status = 'pending'
+                AND expires_at > ?
+        `)
+        .bind(code, now, broker, stateHash, now)
+        .run();
+
+    // Exactly one pending session must have accepted this callback.
+    return result.success && result.meta.changes === 1;
+}
+
+async function failAuthSession(
+    env,
+    { broker, state }
+) {
+    if (
+        typeof state !== "string" ||
+        state.length === 0 ||
+        state.length > 1024
+    ) {
+        return false;
+    }
+
+    const stateHash = await sha256Hex(state);
+    const now = Math.floor(Date.now() / 1000);
+
+    const result = await env.DB
+        .prepare(`
+            UPDATE auth_sessions
+            SET
+                status = CASE
+                    WHEN expires_at <= ? THEN 'expired'
+                    ELSE 'failed'
+                END,
+                failure_code = 'authorization_denied',
+                callback_received_at = ?
+            WHERE
+                broker = ?
+                AND state_hash = ?
+                AND status = 'pending'
+        `)
+        .bind(now, now, broker, stateHash)
+        .run();
+
+    return result.success && result.meta.changes === 1;
+}
+
+export { createAuthSession, receiveAuthCode, failAuthSession };
