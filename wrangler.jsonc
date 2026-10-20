@@ -1,20 +1,33 @@
 {
-    "$schema": "./node_modules/wrangler/config-schema.json",
-    "name": "corex-auth-server",
-    "main": "main.js",
-    "compatibility_date": "2026-10-15",
-    "compatibility_flags": [
-        "nodejs_compat"
-    ],
-    "rules": [
-        { "type": "ESModule", "globs": ["**/*.js"] }
-    ],
-    "assets": {
-        "directory": "./public",
-        "binding": "ASSETS",
-        "run_worker_first": [
-            "/api/*",
-            "/auth/*"
-        ]
-    }
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "corex-server",
+	"main": "main.js",
+	"compatibility_date": "2026-10-15",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"rules": [
+		{
+			"type": "ESModule",
+			"globs": [
+				"**/*.js"
+			]
+		}
+	],
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS",
+		"run_worker_first": [
+			"/api/*",
+			"/auth/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "corex-db",
+			"migrations_dir": "db/migrations",
+			"database_id": "95587b10-6f24-43be-acd8-71869a4fa55d"
+		}
+	]
 }

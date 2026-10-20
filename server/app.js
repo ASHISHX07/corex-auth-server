@@ -1,8 +1,8 @@
 import express from "express";
 import healthRouter from "./routes/health.routes.js";
-import createAuthRouter from "./routes/auth.routes.js";
+import authRouter from "./routes/auth.routes.js";
 
-export function createApp(env) {
+export function createApp(_env) {
     const app = express();
 
     app.disable("x-powered-by");
@@ -14,7 +14,7 @@ export function createApp(env) {
     }));
 
     app.use("/api/health", healthRouter);
-    app.use("/api/auth", createAuthRouter(env));
-
+    app.use("/auth/getAuthCode", authRouter);
+    
     return app;
 }

@@ -16,6 +16,7 @@ body {
     height: 100dvh;
     width: 100dvw;
     display: flex;
+    justify-self: center;
     flex-direction: column;
     justify-content: center;
     align-items: center;
@@ -197,55 +198,24 @@ body {
         box-shadow: 0 0 0 0.04rem rgb(77, 77, 77);
         padding: 0.05rem 0.5rem;
 
-        .recent-table-main {
+        .recent-grid-table {
             display: flex;
-            position: relative;
+            flex-direction: row;
             width: 100%;
-            height: 100%;
-            font-size: 0.75rem;
+            box-sizing: border-box;
 
-            .recent-table-head-row {
-                display: flex;
-                height: 1.5rem;
-                align-items: center;
+            .recent-grid-table {
+                display: grid;
+                grid-template-columns: 3fr 1fr 2fr 1fr 1fr 3fr;
+                width: 100%;
+            }
 
-                .recent-table-client-id-col {
-                    display: flex;
-                    position: inherit;
-                    width: 18rem;
-                }
-
-                .recent-table-broker-col {
-                    display: flex;
-                    position: inherit;
-                    width: 6rem;
-                    border-left: 1px solid rgb(192, 192, 192);
-                    padding-left: 0.3rem;
-                }
-
-                .recent-table-timestamp-col {
-                    display: flex;
-                    position: inherit;
-                    width: 10rem;
-                    border-left: 1px solid rgb(192, 192, 192);
-                    padding-left: 0.3rem;
-                }
-
-                .recent-table-status-col {
-                    display: flex;
-                    position: inherit;
-                    width: 5rem;
-                    border-left: 1px solid rgb(192, 192, 192);
-                    padding-left: 0.3rem;
-                }
-
-                .recent-table-response-col {
-                    display: flex;
-                    position: inherit;
-                    width: 5rem;
-                    border-left: 1px solid rgb(192, 192, 192);
-                    padding-left: 0.3rem;
-                }
+            .recent-grid-table div {
+                border: 0.01rem solid rgb(186, 186, 186);
+                padding: 1rem;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
         }
     }
