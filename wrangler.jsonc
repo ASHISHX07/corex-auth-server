@@ -14,6 +14,9 @@
 			]
 		}
 	],
+	"vars": {
+		"UPSTOX_REDIRECT_URI": "https://corex-server.corex-services.workers.dev/auth/upstox/callback"
+	},
 	"assets": {
 		"directory": "./public",
 		"binding": "ASSETS",
