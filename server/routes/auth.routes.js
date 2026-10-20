@@ -6,6 +6,11 @@ import { limitSessionCreation } from "../middleware/rate-limits.js";
 export default function createAuthRouter(env) {
     const router = Router();
 
+    router.use((_req, res, next) => {
+        res.set("Cache-Control", "no-store");
+        next();
+    });
+
     router.post("/sessions", requireCorexClient(env), limitSessionCreation(env), async (req, res) => {
         const broker = req.body?.broker;
         const appId = req.body?.appId;
