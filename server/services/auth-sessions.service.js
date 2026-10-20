@@ -1,3 +1,5 @@
+import { getProvider } from "../providers/provider-registry.js";
+
 function randomBase64Url(byteLength = 32) {
     const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
     
@@ -22,26 +24,27 @@ async function sha256Hex(value) {
         .join("");
 }
 
-async function createAuthSession(env, clientId) {
+async function createAuthSession(env, { broker, appId }) {
     if (!env.DB) {
         throw new Error("Database binding is missing");
     }
 
-    const redirectUri = env.UPSTOX_REDIRECT_URI;
+    const provider = getProvider(env, broker);
 
-    if (
-        typeof redirectUri !== "string" ||
-        !redirectUri.startsWith("https://")
-    ) {
-        throw new Error("Callback URI is not configured");
+    if (!provider) {
+        const error = new Error("Unsupported broker");
+        error.code = "UNSUPPORTED_BROKER";
+        throw error;
     }
 
     const sessionId = crypto.randomUUID();
     const state = randomBase64Url();
     const retrievalSecret = randomBase64Url();
 
-    const stateHash = await sha256Hex(state);
-    const retrievalSecretHash = await sha256Hex(retrievalSecret);
+    const [stateHash, retrievalSecretHash] = await Promise.all([
+        sha256Hex(state),
+        sha256Hex(retrievalSecret)
+    ]);
 
     const now = Math.floor(Date.now() / 1000);
     const ttlSeconds = 300;
@@ -51,18 +54,20 @@ async function createAuthSession(env, clientId) {
         .prepare(`
             INSERT INTO auth_sessions (
                 session_id,
-                client_id,
+                broker,
+                provider_app_id,
                 state_hash,
                 retrieval_secret_hash,
                 status,
                 created_at,
                 expires_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .bind(
             sessionId,
-            clientId,
+            broker,
+            appId,
             stateHash,
             retrievalSecretHash,
             "pending",
@@ -72,25 +77,19 @@ async function createAuthSession(env, clientId) {
         .run();
 
     if (!result.success) {
-        throw new Error("Failed to create authentication session");
+        throw new Error("Session creation failed");
     }
 
-    const authorizationUrl = new URL(
-        "https://api.upstox.com/v2/login/authorization/dialog"
-    );
-
-    authorizationUrl.searchParams.set("client_id", clientId);
-    authorizationUrl.searchParams.set(
-        "redirect_uri",
-        redirectUri
-    );
-    authorizationUrl.searchParams.set("response_type", "code");
-    authorizationUrl.searchParams.set("state", state);
+    const authorizationUrl = provider.buildAuthorizationUrl({
+        appId,
+        state
+    });
 
     return {
         sessionId,
+        broker,
         retrievalSecret,
-        authorizationUrl: authorizationUrl.toString(),
+        authorizationUrl,
         expiresInSeconds: ttlSeconds,
         expiresAt: new Date(expiresAt * 1000).toISOString()
     };
