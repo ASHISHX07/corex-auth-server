@@ -209,15 +209,25 @@ async function getAuthSessionResult(env, { sessionId, retrievalSecret }) {
             .bind(reason, sessionId, secretHash)
             .run();
 
+    const checkClientStatus = async session => {
+        if (!session) {
+            return { status: "not_found" };
+        }
+    
+        if (session.client_status !== "active") {
+            await expireSession("client_revoked");
+            return { status: "expired" };
+        }
+    
+        return null;
+    };
+
     let session = await findSession();
 
-    if (session.client_status !== "active") {
-        await expireSession("client_revoked");
-        return { status: "expired" };
-    }
+    const ClientStatusError = await checkClientStatus(session);
 
-    if (!session) {
-        return { status: "not_found" };
+    if (ClientStatusError) {
+        return ClientStatusError;
     }
 
     let now = Math.floor(Date.now() / 1000);
@@ -228,6 +238,12 @@ async function getAuthSessionResult(env, { sessionId, retrievalSecret }) {
     ) {
         await expireSession("session_expired");
         session = await findSession();
+
+        const refreshedClientStatusError = await checkClientStatus(session);
+
+        if (refreshedClientStatusError) {
+            return refreshedClientStatusError;
+        }
 
         if (!session) {
             return { status: "not_found" };
@@ -275,6 +291,13 @@ async function getAuthSessionResult(env, { sessionId, retrievalSecret }) {
             AND retrieval_secret_hash = ?
             AND status = 'code_received'
             AND expires_at > ?
+            AND EXISTS (
+                SELECT 1
+                FROM corex_clients AS client
+                WHERE client.corex_client_id =
+                    auth_sessions.corex_client_id
+                AND client.status = 'active'
+            )
             RETURNING authorization_code
         `).bind(now, sessionId, secretHash, now),
 
@@ -301,6 +324,12 @@ async function getAuthSessionResult(env, { sessionId, retrievalSecret }) {
     // Another request may have claimed the code first.
     session = await findSession();
 
+    const clientStatusError = await checkClientStatus(session);
+
+    if (clientStatusError) {
+        return clientStatusError;
+    }
+
     if (!session) {
         return { status: "not_found" };
     }
@@ -313,6 +342,12 @@ async function getAuthSessionResult(env, { sessionId, retrievalSecret }) {
     ) {
         await expireSession();
         session = await findSession();
+
+        const clientStatusError = await checkClientStatus(session);
+
+        if (clientStatusError) {
+            return clientStatusError;
+        }
 
         if (!session) {
             return { status: "not_found" };
