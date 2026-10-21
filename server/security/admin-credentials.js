@@ -1,7 +1,7 @@
 import { pbkdf2 } from "node:crypto";
 import { Buffer } from "node:buffer";
 
-const ITERATIONS = 600_000;
+const ITERATIONS = 25_000;
 const HASH_LENGTH = 32;
 
 const encoder = new TextEncoder();
