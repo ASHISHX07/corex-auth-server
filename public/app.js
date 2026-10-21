@@ -562,7 +562,64 @@ function setupEvents() {
     });
 }
 
+async function loadAdminIdentity() {
+    const nameElement = $("#profile-name");
+    const avatarElement = $("#profile-avatar");
+    const profileChip = $("#profile-chip");
+
+    try {
+        const response = await fetch("/api/v1/admin/me", {
+            method: "GET",
+            credentials: "same-origin",
+            cache: "no-store"
+        });
+
+        if (response.status === 401) {
+            window.location.replace("/login.html");
+            return;
+        }
+
+        if (!response.ok) {
+            throw new Error("Unable to load admin identity.");
+        }
+
+        const data = await response.json();
+
+        if (
+            data.authenticated !== true ||
+            typeof data.username !== "string" ||
+            !data.username.trim()
+        ) {
+            throw new Error("Invalid admin identity response.");
+        }
+
+        const username = data.username.trim();
+
+        if (nameElement) {
+            nameElement.textContent = username;
+        }
+
+        if (avatarElement) {
+            avatarElement.textContent =
+                Array.from(username)[0].toUpperCase();
+        }
+
+        if (profileChip) {
+            profileChip.title = `Signed in as ${username}`;
+        }
+    } catch {
+        if (nameElement) {
+            nameElement.textContent = "Admin";
+        }
+
+        if (avatarElement) {
+            avatarElement.textContent = "A";
+        }
+    }
+}
+
 function initDashboard() {
+    loadAdminIdentity()
     renderRequests(demoRequests);
     renderSessions();
     renderChart($("#period-select")?.value || "24h");
