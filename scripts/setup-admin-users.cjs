@@ -86,7 +86,7 @@ function makePasswordRecord(username, password) {
 }
 
 function updateEnvFile(values) {
-    const envPath = ".env";
+    const envPath = ".dev.vars";
 
     let contents = fs.existsSync(envPath)
         ? fs.readFileSync(envPath, "utf8")
