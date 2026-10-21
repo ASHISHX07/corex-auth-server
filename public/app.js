@@ -293,20 +293,53 @@ function normalizeRequest(record) {
             ? `Client ${shortId(record.corex_client_id)}`
             : "Unattributed");
 
+    const durationMs = Math.max(
+        0,
+        Number(record.duration_ms ?? 0)
+    );
+
     return {
         raw: record,
         id: String(record.request_id ?? ""),
         client: clientName,
         broker: record.broker,
         endpoint: `${record.method ?? ""} ${record.path ?? ""}`.trim(),
-        time: formatTimestamp(record.created_at, false),
+
+        time: formatTimestamp(
+            record.created_at,
+            ($("#period-select")?.value || "24h") !== "24h"
+        ),
+
         statusCode: code,
         status: requestStatus(code),
-        latency: `${Math.max(0, Number(record.duration_ms ?? 0))} ms`
+
+        createdAtUtc: Number(record.created_at) > 0
+            ? new Date(Number(record.created_at) * 1000).toISOString()
+            : "",
+
+        durationMs,
+        latency: `${durationMs} ms`
     };
 }
 
-function getFilteredRequests() {
+function buildRequestsUrl(limit = 25, cursor = null, periodOverride = null) {
+    const period = periodOverride ||
+        $("#period-select")?.value ||
+        "24h";
+
+    const params = new URLSearchParams({
+        limit: String(limit),
+        period
+    });
+
+    if (cursor) {
+        params.set("cursor", cursor);
+    }
+
+    return `/api/v1/admin/requests?${params.toString()}`;
+}
+
+function getFilteredRequests(records = state.requests) {
     const query = ($("#request-search")?.value || "")
         .trim()
         .toLowerCase();
@@ -314,7 +347,7 @@ function getFilteredRequests() {
     const brokerFilter = $("#broker-filter")?.value || "all";
     const statusFilter = $("#status-filter")?.value || "all";
 
-    return state.requests.map(normalizeRequest).filter(request => {
+    return records.map(normalizeRequest).filter(request => {
         const searchable = [
             request.id,
             request.client,
@@ -333,6 +366,79 @@ function getFilteredRequests() {
     });
 }
 
+function updateLoadMoreButton() {
+    const button = $("#load-more-requests");
+    if (!button) return;
+
+    button.hidden = !state.requestHasMore;
+    button.disabled = state.requestLoadingMore;
+
+    setText(
+        "#load-more-label",
+        state.requestLoadingMore
+            ? "Loading…"
+            : "Load older requests"
+    );
+}
+
+async function loadMoreRequests() {
+    if (
+        !state.requestHasMore ||
+        !state.requestCursor ||
+        state.requestLoadingMore
+    ) {
+        return;
+    }
+
+    const loadVersion = state.requestLoadVersion;
+
+    state.requestLoadingMore = true;
+    updateLoadMoreButton();
+
+    try {
+        const data = await fetchAdminJson(
+            buildRequestsUrl(25, state.requestCursor)
+        );
+
+        if (loadVersion !== state.requestLoadVersion) return;
+
+        const page = Array.isArray(data.items)
+            ? data.items
+            : [];
+
+        const knownIds = new Set(
+            state.requests.map(item => item.request_id)
+        );
+
+        state.requests.push(
+            ...page.filter(item => !knownIds.has(item.request_id))
+        );
+
+        state.requestCursor =
+            typeof data.nextCursor === "string" && data.nextCursor
+                ? data.nextCursor
+                : null;
+
+        state.requestHasMore =
+            Boolean(state.requestCursor) && page.length > 0;
+
+        renderRequests();
+        updateUsage();
+    } catch (error) {
+        if (!error?.unauthorized &&
+            loadVersion === state.requestLoadVersion) {
+            showToast(
+                "Couldn't load older requests. Please try again."
+            );
+        }
+    } finally {
+        if (loadVersion === state.requestLoadVersion) {
+            state.requestLoadingMore = false;
+            updateLoadMoreButton();
+        }
+    }
+}
+
 function renderRequests() {
     const body = $("#requests-body");
     const count = $("#request-count");
@@ -341,6 +447,10 @@ function renderRequests() {
 
     const rows = getFilteredRequests();
 
+    const periodTotal = Number(
+        state.overview?.requests?.total ?? 0
+    );
+
     body.replaceChildren();
 
     if (!rows.length) {
@@ -348,15 +458,20 @@ function renderRequests() {
             "#requests-body",
             8,
             state.requests.length
-                ? "No logged requests match these filters."
-                : "No request logs have been recorded yet."
+                ? "No loaded requests match these filters. Load older records or export CSV to search the selected period."
+                : "No request logs have been recorded in this period."
         );
 
         count.textContent = state.requests.length
-            ? `0 matching requests · ${state.requests.length} records loaded`
-            : "0 request records";
+            ? `0 matches among ${formatNumber(state.requests.length)} loaded records`
+            : `0 records loaded · ${formatNumber(periodTotal)} in period`;
 
-        setText("#nav-request-count", state.requests.length);
+        setText(
+            "#nav-request-count",
+            compactNumber(periodTotal)
+        );
+
+        updateLoadMoreButton();
         return;
     }
 
@@ -389,6 +504,7 @@ function renderRequests() {
         );
 
         row.appendChild(statusCell);
+
         appendCell(row, request.latency, "time-cell");
 
         fragment.appendChild(row);
@@ -397,9 +513,19 @@ function renderRequests() {
     body.appendChild(fragment);
 
     count.textContent =
-        `Showing ${rows.length} of ${state.requests.length} latest logged requests`;
+        `Showing ${rows.length} matching loaded rows · ` +
+        `${formatNumber(state.requests.length)} loaded · ` +
+        `${formatNumber(periodTotal)} total requests in period` +
+        (state.requestHasMore
+            ? " · older requests available"
+            : "");
 
-    setText("#nav-request-count", state.requests.length);
+    setText(
+        "#nav-request-count",
+        compactNumber(periodTotal)
+    );
+
+    updateLoadMoreButton();
 }
 
 /* ---------- OAuth session rendering ---------- */
@@ -909,6 +1035,23 @@ async function loadDashboardData() {
     const period = $("#period-select")?.value || "24h";
     const refreshButton = $("#refresh-button");
 
+    const requestVersion = ++state.requestLoadVersion;
+
+    state.requestLoadingMore = false;
+    state.requestCursor = null;
+    state.requestHasMore = false;
+    state.requests = [];
+
+    renderTableMessage(
+        "#requests-body",
+        8,
+        "Loading request records…",
+        "loading-cell"
+    );
+
+    setText("#request-count", "Loading request records…");
+    updateLoadMoreButton();
+
     if (refreshButton) refreshButton.disabled = true;
 
     setDashboardNotice(
@@ -922,7 +1065,7 @@ async function loadDashboardData() {
             "overview",
             `/api/v1/admin/overview?period=${encodeURIComponent(period)}`
         ],
-        ["requests", "/api/v1/admin/requests?limit=100"],
+        ["requests", buildRequestsUrl(25, null, period)],
         ["sessions", "/api/v1/admin/sessions?limit=100"],
         ["clients", "/api/v1/admin/clients?limit=100"]
     ];
@@ -933,6 +1076,8 @@ async function loadDashboardData() {
             data: await fetchAdminJson(url)
         }))
     );
+
+    if (requestVersion !== state.requestLoadVersion) return;
 
     if (
         results.some(
@@ -966,6 +1111,13 @@ async function loadDashboardData() {
                     8,
                     "Request logs couldn't be loaded."
                 );
+
+                setText(
+                    "#request-count",
+                    "Request records unavailable"
+                );
+
+                updateLoadMoreButton();
             } else if (key === "sessions" && !state.sessions.length) {
                 renderTableMessage(
                     "#sessions-body",
@@ -987,19 +1139,31 @@ async function loadDashboardData() {
 
         if (key === "overview") {
             updateOverview(data);
+
         } else if (key === "requests") {
             state.requests = Array.isArray(data.items)
                 ? data.items
                 : [];
 
+            state.requestCursor =
+                typeof data.nextCursor === "string" && data.nextCursor
+                    ? data.nextCursor
+                    : null;
+
+            state.requestHasMore = Boolean(state.requestCursor);
+            state.requestLoadingMore = false;
+
             renderRequests();
             updateUsage();
+            updateLoadMoreButton();
+
         } else if (key === "sessions") {
             state.sessions = Array.isArray(data.items)
                 ? data.items
                 : [];
 
             renderSessions();
+
         } else if (key === "clients") {
             state.clients = Array.isArray(data.items)
                 ? data.items
@@ -1031,62 +1195,149 @@ async function loadDashboardData() {
 /* ---------- CSV export ---------- */
 
 async function exportCsv() {
-    const rows = getFilteredRequests();
+    const button = $("#export-button");
+    const label = $("#export-button-label");
 
-    if (!rows.length) {
-        showToast("No live request records match the current filters.");
-        return;
-    }
+    const controls = [
+        "#period-select",
+        "#request-search",
+        "#broker-filter",
+        "#status-filter"
+    ].map(selector => $(selector)).filter(Boolean);
 
-    const columns = [
-        ["request_id", "id"],
-        ["client", "client"],
-        ["broker", "broker"],
-        ["endpoint", "endpoint"],
-        ["time", "time"],
-        ["http_status", "statusCode"],
-        ["result", "status"],
-        ["latency", "latency"]
-    ];
-
-    function escapeCsv(value) {
-        let text = String(value ?? "");
-
-        // Reduce CSV formula injection risk.
-        if (/^[=+@\-\t\r]/.test(text)) {
-            text = `'${text}`;
-        }
-
-        return `"${text.replace(/"/g, '""')}"`;
-    }
-
-    const csv = [
-        columns.map(([header]) => escapeCsv(header)).join(","),
-        ...rows.map(row =>
-            columns
-                .map(([, key]) => escapeCsv(row[key]))
-                .join(",")
-        )
-    ].join("\r\n");
-
-    const blob = new Blob(
-        ["\uFEFF", csv],
-        { type: "text/csv;charset=utf-8;" }
+    const previousDisabled = controls.map(
+        control => control.disabled
     );
 
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    const selectedPeriod = $("#period-select")?.value || "24h";
 
-    link.href = url;
-    link.download = "corex-live-requests.csv";
-    link.style.display = "none";
+    if (button) button.disabled = true;
 
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    controls.forEach(control => {
+        control.disabled = true;
+    });
 
-    showToast(`Exported ${rows.length} live request records.`);
+    setText("#export-button-label", "Preparing CSV…");
+
+    try {
+        const records = [];
+        const seenCursors = new Set();
+        let cursor = null;
+
+        do {
+            const data = await fetchAdminJson(
+                buildRequestsUrl(100, cursor, selectedPeriod)
+            );
+
+            const page = Array.isArray(data.items)
+                ? data.items
+                : [];
+
+            records.push(...page);
+
+            const nextCursor =
+                typeof data.nextCursor === "string" && data.nextCursor
+                    ? data.nextCursor
+                    : null;
+
+            if (
+                nextCursor &&
+                (seenCursors.has(nextCursor) || page.length === 0)
+            ) {
+                throw new Error("Request pagination did not advance.");
+            }
+
+            if (nextCursor) {
+                seenCursors.add(nextCursor);
+            }
+
+            cursor = nextCursor;
+
+            if (label && cursor) {
+                label.textContent =
+                    `Preparing CSV (${formatNumber(records.length)})…`;
+            }
+        } while (cursor);
+
+        const rows = getFilteredRequests(records);
+
+        if (!rows.length) {
+            showToast(
+                "No request records match these filters in the selected period."
+            );
+            return;
+        }
+
+        const columns = [
+            ["request_id", "id"],
+            ["client", "client"],
+            ["broker", "broker"],
+            ["endpoint", "endpoint"],
+            ["created_at_utc", "createdAtUtc"],
+            ["http_status", "statusCode"],
+            ["result", "status"],
+            ["latency_ms", "durationMs"]
+        ];
+
+        function escapeCsv(value) {
+            let text = String(value ?? "");
+
+            // Reduce CSV formula-injection risk.
+            if (/^[\u0009\u000A\u000D=+\-@]/.test(text)) {
+                text = "'" + text;
+            }
+
+            return `"${text.replace(/"/g, '""')}"`;
+        }
+
+        const csv = [
+            columns
+                .map(([header]) => escapeCsv(header))
+                .join(","),
+
+            ...rows.map(row =>
+                columns
+                    .map(([, key]) => escapeCsv(row[key]))
+                    .join(",")
+            )
+        ].join("\r\n");
+
+        const blob = new Blob(
+            ["\uFEFF", csv],
+            { type: "text/csv;charset=utf-8;" }
+        );
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.download =
+            `corex-requests-${selectedPeriod}-` +
+            `${new Date().toISOString().slice(0, 10)}.csv`;
+
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        showToast(
+            `Exported ${formatNumber(rows.length)} matching requests from the selected period.`
+        );
+    } catch (error) {
+        if (!error?.unauthorized) {
+            showToast("CSV export failed. Please try again.");
+        }
+    } finally {
+        if (button) button.disabled = false;
+
+        controls.forEach((control, index) => {
+            control.disabled = previousDisabled[index];
+        });
+
+        if (label) label.textContent = "Export CSV";
+    }
 }
 
 /* ---------- Client revocation ---------- */
@@ -1203,6 +1454,10 @@ function setupEvents() {
     $("#status-filter")?.addEventListener("change", renderRequests);
 
     $("#export-button")?.addEventListener("click", exportCsv);
+    $("#load-more-requests")?.addEventListener(
+        "click",
+        loadMoreRequests
+    );
 
     $("#period-select")?.addEventListener(
         "change",

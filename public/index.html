@@ -156,7 +156,7 @@
                     </span>
 
                     <button class="icon-button" id="refresh-button"
-                            type="button" aria-label="Refresh preview">
+                            type="button" aria-label="Refresh dashboard data">
                         <svg class="icon"><use href="#i-refresh"/></svg>
                     </button>
 
@@ -342,7 +342,7 @@
 
                         <div class="chart-wrap" id="traffic-chart"
                              role="img" aria-label="Recorded request volume chart">
-                            <div class="chart-y-labels" aria-hidden="true">
+                             <div class="chart-y-labels" id="chart-y-labels" aria-hidden="true">
                                 <span>0</span>
                                 <span>0</span>
                                 <span>0</span>
@@ -710,7 +710,7 @@
                             <div>
                                 <div class="panel-title">Recent API usage</div>
                                 <p class="panel-subtitle">
-                                    Endpoint mix across the latest logged requests
+                                    Endpoint mix across loaded request records
                                 </p>
                             </div>
 
