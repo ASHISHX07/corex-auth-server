@@ -1,3 +1,6 @@
+import { pbkdf2 } from "node:crypto";
+import { Buffer } from "node:buffer";
+
 const ITERATIONS = 600_000;
 const HASH_LENGTH = 32;
 
@@ -33,27 +36,24 @@ function equalBytes(a, b) {
     return difference === 0;
 }
 
-async function derivePasswordHash(password, salt) {
-    const key = await crypto.subtle.importKey(
-        "raw",
-        encoder.encode(password),
-        "PBKDF2",
-        false,
-        ["deriveBits"]
-    );
+function derivePasswordHash(password, salt) {
+    return new Promise((resolve, reject) => {
+        pbkdf2(
+            password,
+            Buffer.from(salt),
+            ITERATIONS,
+            HASH_LENGTH,
+            "sha256",
+            (error, derivedKey) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
 
-    const derived = await crypto.subtle.deriveBits(
-        {
-            name: "PBKDF2",
-            salt,
-            iterations: ITERATIONS,
-            hash: "SHA-256"
-        },
-        key,
-        HASH_LENGTH * 8
-    );
-
-    return new Uint8Array(derived);
+                resolve(new Uint8Array(derivedKey));
+            }
+        );
+    });
 }
 
 function getConfiguredUsers(env) {
