@@ -3,7 +3,6 @@ import { Router } from "express";
 import {
     requireAdmin,
     requireSameOriginForCookieAdmin,
-    constantTimeEqual,
     isSameOriginRequest
 } from "../middleware/require-admin.js";
 
@@ -30,19 +29,6 @@ import { revokeCorexClient } from "../services/client-admin.service.js";
 
 import { verifyAdminCredentials } from "../security/admin-credentials.js";
 
-import {
-    createAdminSessionToken,
-    setAdminSessionCookie,
-    clearAdminSessionCookie,
-    SESSION_TTL_SECONDS
-} from "../security/admin-session.js";
-
-import {
-    requireAdmin,
-    isSameOriginRequest,
-    requireSameOriginForCookieAdmin
-} from "../middleware/require-admin.js";
-
 function validId(value) {
     return typeof value === "string" &&
         value.length > 0 &&
@@ -66,9 +52,10 @@ export default function createAdminRouter(env) {
     });
 
     /*
-     * Browser login.
-     * The admin key is exchanged for a short-lived HttpOnly cookie.
-     */
+    * Browser login.
+    * The configured admin username and password are verified
+    * before issuing a short-lived HttpOnly session cookie.
+    */
     router.post(
         "/login",
         limitAdminLogin(env),

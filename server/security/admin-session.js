@@ -162,6 +162,11 @@ export function readAdminSessionCookie(req) {
 }
 
 function cookieOptions(req, maxAge) {
+    const host = (req?.get?.("host") ?? "").toLowerCase();
+
+    const isLocalDevelopment =
+        /^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(host);
+
     const parts = [
         `${COOKIE_NAME}=`,
         "Path=/",
@@ -170,7 +175,13 @@ function cookieOptions(req, maxAge) {
         `Max-Age=${maxAge}`
     ];
 
-    if (req?.secure || req?.protocol === "https") {
+    // Allow ordinary HTTP for local development only.
+    // Production hosts always receive the Secure attribute.
+    if (
+        !isLocalDevelopment ||
+        req?.secure ||
+        req?.protocol === "https"
+    ) {
         parts.push("Secure");
     }
 
