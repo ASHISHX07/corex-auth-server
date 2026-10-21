@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html
+    lang="en"
+    data-corex-broker="__COREX_BROKER__"
+    data-corex-status="__COREX_STATUS__"
+>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+
+    <title>Authorization response | CoreX</title>
+
+    <link rel="icon" href="/assets/logo.png" type="image/png">
+    <link rel="stylesheet" href="/auth-response.css">
+    <script src="/auth-response.js" defer></script>
+</head>
+
+<body>
+    <div class="page-shell">
+        <header class="topbar">
+            <a class="brand" href="/" aria-label="CoreX home">
+                <img
+                    class="brand-logo"
+                    src="/assets/logo.png"
+                >
+
+                <!-- <span class="brand-name">CoreX</span> -->
+                <span class="brand-divider"></span>
+                <span class="brand-section">ACCOUNT CONNECTION</span>
+            </a>
+
+            <div class="secure-label">
+                <span class="secure-dot"></span>
+                Secure authorization
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section
+                class="response-card"
+                id="response-card"
+                data-tone="neutral"
+                aria-labelledby="status-title"
+            >
+                <div class="card-top-line"></div>
+
+                <div class="card-content">
+                    <div class="status-icon" id="status-icon" aria-hidden="true">
+                        •
+                    </div>
+
+                    <p class="eyebrow" id="status-eyebrow">
+                        AUTHORIZATION RESPONSE
+                    </p>
+
+                    <h1 id="status-title">
+                        Authorization status
+                    </h1>
+
+                    <p class="status-description" id="status-description">
+                        CoreX is preparing the authorization details.
+                        Return to the CoreX application to check your
+                        connection status if this message remains.
+                    </p>
+
+                    <div class="broker-panel">
+                        <div class="broker-mark" id="broker-mark" aria-hidden="true">
+                            BR
+                        </div>
+
+                        <div class="broker-info">
+                            <span class="field-label">BROKER SERVICE</span>
+                            <strong id="broker-name">Your broker</strong>
+                        </div>
+
+                        <span class="broker-badge" id="broker-badge">
+                            AUTH
+                        </span>
+                    </div>
+
+                    <section class="next-steps" aria-labelledby="steps-title">
+                        <h2 id="steps-title">What happens next</h2>
+
+                        <ol id="steps-list">
+                            <li>
+                                Return to the CoreX application.
+                            </li>
+                            <li>
+                                Check the current connection status.
+                            </li>
+                        </ol>
+                    </section>
+
+                    <div class="status-note" id="status-note" role="status">
+                        <span class="note-indicator" aria-hidden="true"></span>
+
+                        <p>
+                            This page only displays the authorization
+                            response. CoreX will confirm when the connection
+                            process is complete.
+                        </p>
+                    </div>
+
+                    <p class="security-hint">
+                        <span aria-hidden="true">◆</span>
+                        Never share your authorization code, access token,
+                        or session credentials.
+                    </p>
+                </div>
+            </section>
+
+            <p class="footer-caption">
+                <span class="footer-dot"></span>
+                CoreX &middot; Secure broker authorization
+            </p>
+        </main>
+
+        <footer class="page-footer">
+            If you didn't initiate this request, you can safely close this tab.
+        </footer>
+    </div>
+</body>
+</html>
