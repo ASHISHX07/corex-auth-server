@@ -2,90 +2,773 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Corex Admin-Panel</title>
-    <link class="tab-icon" rel="icon" href="./assets/logo.png" type="image/x-icon" sizes="any">
-    <link rel="stylesheet" href="style.css">
-    <script src="./app.js" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0b0e13">
+    <meta name="description" content="CoreX authentication service dashboard">
+
+    <title>CoreX — Admin Console</title>
+
+    <link rel="icon" href="/assets/logo.png" type="image/png">
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
 </head>
 <body>
-    <nav class="navbar" id="navigation">
-        <div class="navbar-left">
-            <a class="ref-link" href="./dashboard.html"></a>
-            <img class="nav-logo" src="./assets/logo.png" alt="logo">
-            <h3 class="nav-logo-title">ADMIN PANEL</h3>
-        </div>
-        <div class="navbar-center">
-            <a class href="#" class="nav-btn" id="auth-btn">
-                <div>DASHBOARD</div>
+    <!-- Reusable inline icons; no icon library required. -->
+    <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <symbol id="i-grid" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </symbol>
+        <symbol id="i-activity" viewBox="0 0 24 24">
+            <path d="M3 12h4l3-8 4 16 3-8h4"/>
+        </symbol>
+        <symbol id="i-layers" viewBox="0 0 24 24">
+            <path d="m12 3 9 5-9 5-9-5 9-5Z"/>
+            <path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 24 24">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="10" cy="7" r="4"/>
+            <path d="M20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+        </symbol>
+        <symbol id="i-chart" viewBox="0 0 24 24">
+            <path d="M3 3v18h18"/>
+            <path d="m7 14 4-4 4 3 6-7"/>
+        </symbol>
+        <symbol id="i-plug" viewBox="0 0 24 24">
+            <path d="M12 22v-5M9 8V2M15 8V2M5 8h14v4a7 7 0 0 1-14 0V8Z"/>
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="m20 20-4-4"/>
+        </symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24">
+            <path d="M20 7v5h-5M4 17v-5h5"/>
+            <path d="M5.6 9a7 7 0 0 1 11.6-2L20 12M4 12l2.8 5a7 7 0 0 0 11.6-2"/>
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 24 24">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <path d="m7 10 5 5 5-5M12 15V3"/>
+        </symbol>
+        <symbol id="i-arrow-up" viewBox="0 0 24 24">
+            <path d="M7 17 17 7M7 7h10v10"/>
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 7v5l3 2"/>
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24">
+            <path d="m5 12 4 4L19 6"/>
+        </symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24">
+            <path d="m10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0Z"/>
+            <path d="M12 9v4m0 4h.01"/>
+        </symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24">
+            <path d="m9 18 6-6-6-6"/>
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24">
+            <rect x="8" y="8" width="13" height="13" rx="2"/>
+            <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>
+        </symbol>
+        <symbol id="i-menu" viewBox="0 0 24 24">
+            <path d="M4 6h16M4 12h16M4 18h16"/>
+        </symbol>
+    </svg>
+
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar">
+            <a class="brand" href="#overview" aria-label="CoreX overview">
+                <img src="/assets/logo.png" alt="" class="brand-logo">
+                <span class="brand-copy">
+                    <span class="brand-name">CoreX</span>
+                    <span class="brand-subtitle">CONTROL PLANE</span>
+                </span>
             </a>
-            <a class href="#" class="nav-btn" id="auth-btn">
-                <div>SESSIONS</div>
-            </a>
-            <a class href="#" class="nav-btn" id="usage-btn">
-                <div>USAGE</div>
-            </a>
-            <a class href="#" class="nav-btn" id="usage-btn">
-                <div>ENDPOINTS</div>
-            </a>
-        </div>
-        <div class="navbar-right">
-            <div class="username-box">
-                User: <span id="username-field">#User</span>
+
+            <div class="sidebar-label">WORKSPACE</div>
+
+            <nav class="main-nav" aria-label="Main navigation">
+                <a class="nav-link active" href="#overview" data-nav="overview">
+                    <svg class="icon"><use href="#i-grid"/></svg>
+                    <span>Overview</span>
+                </a>
+                <a class="nav-link" href="#requests" data-nav="requests">
+                    <svg class="icon"><use href="#i-activity"/></svg>
+                    <span>Requests</span>
+                    <span class="nav-count">6</span>
+                </a>
+                <a class="nav-link" href="#sessions" data-nav="sessions">
+                    <svg class="icon"><use href="#i-layers"/></svg>
+                    <span>Sessions</span>
+                </a>
+                <a class="nav-link" href="#providers" data-nav="providers">
+                    <svg class="icon"><use href="#i-plug"/></svg>
+                    <span>Providers</span>
+                </a>
+
+                <div class="sidebar-label nav-group-label">MONITORING</div>
+
+                <a class="nav-link" href="#usage" data-nav="usage">
+                    <svg class="icon"><use href="#i-chart"/></svg>
+                    <span>Usage</span>
+                </a>
+                <a class="nav-link" href="#endpoints" data-nav="endpoints">
+                    <svg class="icon"><use href="#i-users"/></svg>
+                    <span>Endpoints</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-spacer"></div>
+
+            <div class="sidebar-mode">
+                <span class="mode-indicator"></span>
+                <div>
+                    <strong>Preview mode</strong>
+                    <span>Sample data only</span>
+                </div>
             </div>
-            <a href="#">
-                <img src="./assets/logout_icon.svg" alt="" id="logout-btn">
-            </a>
-        </div>
-    </nav>
 
-    <div class="main-box">
-        <div class="left-box">
-            <div class="activity-box">
-    
+            <div class="sidebar-footer">
+                <span>COREX AUTH SERVER</span>
+                <span>Admin Console <span class="version-label">UI</span></span>
             </div>
-            <div class="horizontal-seprator-line"></div>
-            <div class="services-box">
+        </aside>
 
-            </div>
-        </div>
-
-        <div class="vertical-seprator-line"></div>
-
-        <div class="recent-view-box">
-            <div class="recent-grid-table header">
-                <!-- Header -->
-                <div class="recent-grid-table-header">
-                    <div class="recent-table-client-id-col">CLIENT-ID</div>
-                    <div class="recent-table-broker-col">BROKER</div>
-                    <div class="recent-table-timestamp-col">TIMESTAMP</div>
-                    <div class="recent-table-status-col">STATUS</div>
-                    <div class="recent-table-response-col">RESPONSE</div>
-                    <div class="recent-table-endpoint-col">ENDPOINT</div>
+        <main class="workspace">
+            <header class="topbar">
+                <div class="breadcrumbs">
+                    <span>CoreX</span>
+                    <svg class="icon breadcrumb-icon"><use href="#i-chevron"/></svg>
+                    <strong id="breadcrumb-current">Overview</strong>
                 </div>
 
-                <!-- Data Row -->
-                 <div class="recent-grid-table">
+                <div class="topbar-actions">
+                    <span class="preview-tag">
+                        <span></span>
+                        UI PREVIEW
+                    </span>
 
-                 </div>
+                    <button class="icon-button" id="refresh-button"
+                            type="button" aria-label="Refresh preview">
+                        <svg class="icon"><use href="#i-refresh"/></svg>
+                    </button>
+
+                    <div class="profile-chip" title="Dashboard preview">
+                        <span class="profile-avatar">A</span>
+                        <span class="profile-name">Ashish</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="dashboard-content">
+                <section class="page-heading section-anchor" id="overview">
+                    <div>
+                        <div class="eyebrow">SYSTEM OVERVIEW</div>
+                        <h1>Dashboard<span class="heading-period">.</span></h1>
+                        <p class="page-description">
+                            Monitor authentication activity and your CoreX services.
+                        </p>
+                    </div>
+
+                    <div class="heading-actions">
+                        <label class="select-wrap" for="period-select">
+                            <svg class="icon"><use href="#i-clock"/></svg>
+                            <select id="period-select" aria-label="Chart time range">
+                                <option value="24h">Last 24 hours</option>
+                                <option value="7d">Last 7 days</option>
+                                <option value="30d">Last 30 days</option>
+                            </select>
+                        </label>
+                    </div>
+                </section>
+
+                <div class="preview-notice">
+                    <span class="notice-icon">
+                        <svg class="icon"><use href="#i-alert"/></svg>
+                    </span>
+                    <p>
+                        <strong>Preview data</strong>
+                        <span>
+                            Metrics and records below are illustrative. Live D1 and
+                            analytics data will be connected later.
+                        </span>
+                    </p>
+                    <button type="button" class="notice-dismiss"
+                            id="dismiss-notice" aria-label="Dismiss preview notice">×</button>
+                </div>
+
+                <section class="stats-grid" aria-label="Example metrics">
+                    <article class="stat-card">
+                        <div class="stat-topline">
+                            <span class="stat-label">TOTAL REQUESTS</span>
+                            <span class="stat-icon violet">
+                                <svg class="icon"><use href="#i-activity"/></svg>
+                            </span>
+                        </div>
+                        <div class="stat-value" data-stat="requests">12,846</div>
+                        <div class="stat-foot">
+                            <span class="trend positive">
+                                <svg class="icon"><use href="#i-arrow-up"/></svg>
+                                12.8%
+                            </span>
+                            <span>vs. previous period</span>
+                        </div>
+                        <div class="stat-sparkline spark-violet" aria-hidden="true">
+                            <span style="--bar:28%"></span>
+                            <span style="--bar:43%"></span>
+                            <span style="--bar:37%"></span>
+                            <span style="--bar:58%"></span>
+                            <span style="--bar:48%"></span>
+                            <span style="--bar:72%"></span>
+                            <span style="--bar:64%"></span>
+                            <span style="--bar:88%"></span>
+                            <span style="--bar:69%"></span>
+                            <span style="--bar:100%"></span>
+                        </div>
+                    </article>
+
+                    <article class="stat-card">
+                        <div class="stat-topline">
+                            <span class="stat-label">SUCCESS RATE</span>
+                            <span class="stat-icon green">
+                                <svg class="icon"><use href="#i-check"/></svg>
+                            </span>
+                        </div>
+                        <div class="stat-value">94.9<span class="stat-unit">%</span></div>
+                        <div class="stat-foot">
+                            <span class="trend positive">
+                                <svg class="icon"><use href="#i-arrow-up"/></svg>
+                                2.4%
+                            </span>
+                            <span>vs. previous period</span>
+                        </div>
+                        <div class="progress-track stat-progress">
+                            <span style="width:94.9%"></span>
+                        </div>
+                    </article>
+
+                    <article class="stat-card">
+                        <div class="stat-topline">
+                            <span class="stat-label">FAILED REQUESTS</span>
+                            <span class="stat-icon red">
+                                <svg class="icon"><use href="#i-alert"/></svg>
+                            </span>
+                        </div>
+                        <div class="stat-value">182</div>
+                        <div class="stat-foot">
+                            <span class="trend negative">1.2%</span>
+                            <span>of example traffic</span>
+                        </div>
+                        <div class="stat-mini-bars red-bars" aria-hidden="true">
+                            <span style="--bar:20%"></span>
+                            <span style="--bar:34%"></span>
+                            <span style="--bar:28%"></span>
+                            <span style="--bar:55%"></span>
+                            <span style="--bar:43%"></span>
+                            <span style="--bar:28%"></span>
+                            <span style="--bar:72%"></span>
+                            <span style="--bar:45%"></span>
+                        </div>
+                    </article>
+
+                    <article class="stat-card">
+                        <div class="stat-topline">
+                            <span class="stat-label">AVG. RESPONSE TIME</span>
+                            <span class="stat-icon blue">
+                                <svg class="icon"><use href="#i-clock"/></svg>
+                            </span>
+                        </div>
+                        <div class="stat-value">142<span class="stat-unit">ms</span></div>
+                        <div class="stat-foot">
+                            <span class="trend positive">
+                                <svg class="icon"><use href="#i-arrow-up"/></svg>
+                                8.6%
+                            </span>
+                            <span>faster in example data</span>
+                        </div>
+                        <div class="latency-line" aria-hidden="true">
+                            <svg viewBox="0 0 240 35" preserveAspectRatio="none">
+                                <path d="M0 26 L18 19 L37 23 L55 10 L75 18 L95 6 L112 15 L131 13 L151 24 L171 12 L190 17 L209 6 L225 10 L240 3"/>
+                            </svg>
+                        </div>
+                    </article>
+                </section>
+
+                <section class="primary-grid">
+                    <article class="panel traffic-panel">
+                        <div class="panel-header">
+                            <div>
+                                <div class="panel-title">Request activity</div>
+                                <p class="panel-subtitle">
+                                    Illustrative request volume over time
+                                </p>
+                            </div>
+                            <span class="panel-chip">SAMPLE</span>
+                        </div>
+
+                        <div class="chart-legend">
+                            <span><i class="legend-dot violet-dot"></i> Requests</span>
+                            <span><i class="legend-dot green-dot"></i> Successful</span>
+                        </div>
+
+                        <div class="chart-wrap" id="traffic-chart"
+                             role="img" aria-label="Illustrative request volume chart">
+                            <div class="chart-y-labels" aria-hidden="true">
+                                <span>1.2k</span>
+                                <span>900</span>
+                                <span>600</span>
+                                <span>300</span>
+                                <span>0</span>
+                            </div>
+
+                            <div class="chart-main">
+                                <div class="chart-grid-lines" aria-hidden="true">
+                                    <span></span><span></span><span></span><span></span><span></span>
+                                </div>
+
+                                <div class="chart-columns" id="chart-columns">
+                                    <div class="chart-column" style="--height:38%" data-label="00:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                    <div class="chart-column" style="--height:52%" data-label="02:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                    <div class="chart-column" style="--height:44%" data-label="04:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                    <div class="chart-column" style="--height:67%" data-label="06:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                    <div class="chart-column" style="--height:56%" data-label="08:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                    <div class="chart-column" style="--height:83%" data-label="10:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                    <div class="chart-column" style="--height:72%" data-label="12:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                    <div class="chart-column" style="--height:93%" data-label="14:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                    <div class="chart-column" style="--height:77%" data-label="16:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                    <div class="chart-column" style="--height:100%" data-label="18:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                    <div class="chart-column" style="--height:69%" data-label="20:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                    <div class="chart-column" style="--height:84%" data-label="22:00">
+                                        <span class="bar-total"></span><span class="bar-success"></span>
+                                    </div>
+                                </div>
+
+                                <div class="chart-x-labels" id="chart-x-labels" aria-hidden="true">
+                                    <span>00:00</span><span>04:00</span><span>08:00</span>
+                                    <span>12:00</span><span>16:00</span><span>20:00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="chart-footer">
+                            <span><span class="footer-status-dot"></span> Sample data loaded</span>
+                            <span id="chart-period-label">Last 24 hours</span>
+                        </div>
+                    </article>
+
+                    <article class="panel services-panel">
+                        <div class="panel-header">
+                            <div>
+                                <div class="panel-title">Service configuration</div>
+                                <p class="panel-subtitle">Configured components</p>
+                            </div>
+                            <span class="subtle-icon">
+                                <svg class="icon"><use href="#i-layers"/></svg>
+                            </span>
+                        </div>
+
+                        <div class="service-list">
+                            <div class="service-row">
+                                <span class="service-symbol violet">
+                                    <svg class="icon"><use href="#i-plug"/></svg>
+                                </span>
+                                <div class="service-main">
+                                    <strong>OAuth callback</strong>
+                                    <span>Provider redirect handler</span>
+                                </div>
+                                <span class="state-tag configured">Configured</span>
+                            </div>
+
+                            <div class="service-row">
+                                <span class="service-symbol blue">
+                                    <svg class="icon"><use href="#i-layers"/></svg>
+                                </span>
+                                <div class="service-main">
+                                    <strong>Session service</strong>
+                                    <span>Creation &amp; retrieval</span>
+                                </div>
+                                <span class="state-tag configured">Configured</span>
+                            </div>
+
+                            <div class="service-row">
+                                <span class="service-symbol green">
+                                    <svg class="icon"><use href="#i-check"/></svg>
+                                </span>
+                                <div class="service-main">
+                                    <strong>D1 database</strong>
+                                    <span>Remote database binding</span>
+                                </div>
+                                <span class="state-tag configured">Configured</span>
+                            </div>
+
+                            <div class="service-row">
+                                <span class="service-symbol amber">
+                                    <svg class="icon"><use href="#i-activity"/></svg>
+                                </span>
+                                <div class="service-main">
+                                    <strong>Rate limiting</strong>
+                                    <span>Session &amp; callback limits</span>
+                                </div>
+                                <span class="state-tag configured">Configured</span>
+                            </div>
+                        </div>
+
+                        <div class="panel-footnote">
+                            <svg class="icon"><use href="#i-alert"/></svg>
+                            <span>Configuration preview. Live health checks are not connected.</span>
+                        </div>
+                    </article>
+                </section>
+
+                <section class="panel requests-panel section-anchor" id="requests">
+                    <div class="panel-header request-heading">
+                        <div>
+                            <div class="panel-title">Recent requests</div>
+                            <p class="panel-subtitle">
+                                Inspect sample API activity and responses
+                            </p>
+                        </div>
+
+                        <button class="button button-secondary button-small"
+                                id="export-button" type="button">
+                            <svg class="icon"><use href="#i-download"/></svg>
+                            Export CSV
+                        </button>
+                    </div>
+
+                    <div class="table-toolbar">
+                        <label class="search-field">
+                            <svg class="icon"><use href="#i-search"/></svg>
+                            <input id="request-search" type="search"
+                                   placeholder="Search request, client, endpoint..."
+                                   autocomplete="off">
+                            <kbd>⌕</kbd>
+                        </label>
+
+                        <div class="filter-group">
+                            <label class="sr-only" for="broker-filter">Filter by broker</label>
+                            <select id="broker-filter" class="filter-select">
+                                <option value="all">All brokers</option>
+                                <option value="upstox">Upstox</option>
+                                <option value="fyers">FYERS</option>
+                                <option value="zerodha">Zerodha</option>
+                                <option value="angelone">Angel One</option>
+                            </select>
+
+                            <label class="sr-only" for="status-filter">Filter by status</label>
+                            <select id="status-filter" class="filter-select">
+                                <option value="all">All statuses</option>
+                                <option value="success">Success</option>
+                                <option value="error">Errors</option>
+                                <option value="limited">Rate limited</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-scroll">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>REQUEST</th>
+                                    <th>CLIENT</th>
+                                    <th>BROKER</th>
+                                    <th>ENDPOINT</th>
+                                    <th>TIME</th>
+                                    <th>HTTP</th>
+                                    <th>RESULT</th>
+                                    <th>LATENCY</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requests-body">
+                                <tr>
+                                    <td colspan="7" class="loading-cell">Loading preview…</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="table-footer">
+                        <span id="request-count">Showing sample requests</span>
+                        <span class="table-footnote">Illustrative records · not live logs</span>
+                    </div>
+                </section>
+
+                <section class="section-anchor panel sessions-panel" id="sessions">
+                    <div class="panel-header">
+                        <div>
+                            <div class="panel-title">Authentication sessions</div>
+                            <p class="panel-subtitle">
+                                Sample session lifecycle overview
+                            </p>
+                        </div>
+                        <span class="panel-chip">SAMPLE</span>
+                    </div>
+
+                    <div class="session-summary">
+                        <div class="session-summary-item">
+                            <span class="summary-bullet green-dot"></span>
+                            <div><strong>2</strong><span>Completed</span></div>
+                        </div>
+                        <div class="session-summary-item">
+                            <span class="summary-bullet violet-dot"></span>
+                            <div><strong>1</strong><span>Pending</span></div>
+                        </div>
+                        <div class="session-summary-item">
+                            <span class="summary-bullet amber-dot"></span>
+                            <div><strong>1</strong><span>Expired</span></div>
+                        </div>
+                    </div>
+
+                    <div class="table-scroll">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>SESSION ID</th>
+                                    <th>BROKER</th>
+                                    <th>CREATED</th>
+                                    <th>EXPIRES IN</th>
+                                    <th>STATUS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sessions-body">
+                                <tr><td colspan="5" class="loading-cell">Loading preview…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="section-anchor" id="providers">
+                    <div class="section-heading">
+                        <div>
+                            <div class="eyebrow">INTEGRATIONS</div>
+                            <h2>Broker providers</h2>
+                            <p class="section-description">
+                                Broker integrations registered in the CoreX design.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="provider-grid">
+                        <article class="provider-card">
+                            <div class="provider-card-top">
+                                <div class="provider-mark upstox-mark">UP</div>
+                                <span class="state-tag ready">Implemented</span>
+                            </div>
+                            <h3>Upstox</h3>
+                            <p>OAuth authorization and callback relay.</p>
+                            <div class="provider-card-bottom">
+                                <span>OAuth 2.0</span>
+                                <span class="provider-accent upstox-accent"></span>
+                            </div>
+                        </article>
+
+                        <article class="provider-card">
+                            <div class="provider-card-top">
+                                <div class="provider-mark fyers-mark">FY</div>
+                                <span class="state-tag planned">Planned</span>
+                            </div>
+                            <h3>FYERS</h3>
+                            <p>Provider integration to be added.</p>
+                            <div class="provider-card-bottom">
+                                <span>OAuth integration</span>
+                                <span class="provider-accent fyers-accent"></span>
+                            </div>
+                        </article>
+
+                        <article class="provider-card">
+                            <div class="provider-card-top">
+                                <div class="provider-mark zerodha-mark">ZE</div>
+                                <span class="state-tag planned">Planned</span>
+                            </div>
+                            <h3>Zerodha</h3>
+                            <p>Provider integration to be added.</p>
+                            <div class="provider-card-bottom">
+                                <span>Provider adapter</span>
+                                <span class="provider-accent zerodha-accent"></span>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+
+                <section class="section-anchor usage-grid" id="usage">
+                    <article class="panel usage-panel">
+                        <div class="panel-header">
+                            <div>
+                                <div class="panel-title">API usage</div>
+                                <p class="panel-subtitle">Illustrative request consumption</p>
+                            </div>
+                            <span class="panel-chip">SAMPLE</span>
+                        </div>
+
+                        <div class="usage-metric">
+                            <div>
+                                <span class="usage-value">12,846</span>
+                                <span class="usage-caption">requests this period</span>
+                            </div>
+                            <span class="usage-percent">64.2%</span>
+                        </div>
+
+                        <div class="progress-track usage-progress">
+                            <span style="width:64.2%"></span>
+                        </div>
+
+                        <div class="usage-scale">
+                            <span>0</span>
+                            <span>Illustrative quota: 20,000</span>
+                        </div>
+
+                        <div class="usage-divider"></div>
+
+                        <div class="usage-breakdown">
+                            <div><span>Session creation</span><strong>58%</strong></div>
+                            <div><span>Callback handling</span><strong>27%</strong></div>
+                            <div><span>Result retrieval</span><strong>15%</strong></div>
+                        </div>
+                    </article>
+
+                    <article class="panel usage-info-panel">
+                        <div class="panel-header">
+                            <div>
+                                <div class="panel-title">Rate limits</div>
+                                <p class="panel-subtitle">Configured Worker limits</p>
+                            </div>
+                        </div>
+
+                        <div class="limit-item">
+                            <div>
+                                <strong>Session creation</strong>
+                                <span>Per CoreX client</span>
+                            </div>
+                            <div class="limit-value">10 <span>/ min</span></div>
+                        </div>
+
+                        <div class="limit-item">
+                            <div>
+                                <strong>Callback requests</strong>
+                                <span>Per callback IP bucket</span>
+                            </div>
+                            <div class="limit-value">120 <span>/ min</span></div>
+                        </div>
+
+                        <div class="panel-footnote">
+                            <svg class="icon"><use href="#i-alert"/></svg>
+                            <span>Limits shown from configuration, not measured usage.</span>
+                        </div>
+                    </article>
+                </section>
+
+                <section class="section-anchor panel endpoints-panel" id="endpoints">
+                    <div class="panel-header">
+                        <div>
+                            <div class="panel-title">API endpoints</div>
+                            <p class="panel-subtitle">
+                                Registered routes in the current service design
+                            </p>
+                        </div>
+                        <span class="panel-chip">REFERENCE</span>
+                    </div>
+
+                    <div class="table-scroll">
+                        <table class="data-table endpoint-table">
+                            <thead>
+                                <tr>
+                                    <th>METHOD</th>
+                                    <th>PATH</th>
+                                    <th>DESCRIPTION</th>
+                                    <th>AUTH</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="method method-post">POST</span></td>
+                                    <td class="endpoint-path">/api/v1/auth/sessions</td>
+                                    <td>Create an OAuth session</td>
+                                    <td><span class="auth-label">Bearer client key</span></td>
+                                    <td><button class="copy-button" type="button"
+                                        data-copy="/api/v1/auth/sessions" aria-label="Copy session endpoint">
+                                        <svg class="icon"><use href="#i-copy"/></svg>
+                                    </button></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="method method-get">GET</span></td>
+                                    <td class="endpoint-path">/api/v1/auth/sessions/:sessionId/result</td>
+                                    <td>Poll and retrieve the result</td>
+                                    <td><span class="auth-label">Bearer retrieval secret</span></td>
+                                    <td><button class="copy-button" type="button"
+                                        data-copy="/api/v1/auth/sessions/:sessionId/result" aria-label="Copy result endpoint">
+                                        <svg class="icon"><use href="#i-copy"/></svg>
+                                    </button></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="method method-get">GET</span></td>
+                                    <td class="endpoint-path">/auth/upstox/callback</td>
+                                    <td>Receive provider callback</td>
+                                    <td><span class="auth-label">OAuth state</span></td>
+                                    <td><button class="copy-button" type="button"
+                                        data-copy="/auth/upstox/callback" aria-label="Copy callback endpoint">
+                                        <svg class="icon"><use href="#i-copy"/></svg>
+                                    </button></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="method method-post">POST</span></td>
+                                    <td class="endpoint-path">/api/v1/admin/clients/:clientId/revoke</td>
+                                    <td>Revoke a CoreX client</td>
+                                    <td><span class="auth-label">Admin key</span></td>
+                                    <td><button class="copy-button" type="button"
+                                        data-copy="/api/v1/admin/clients/:clientId/revoke" aria-label="Copy revoke endpoint">
+                                        <svg class="icon"><use href="#i-copy"/></svg>
+                                    </button></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="method method-get">GET</span></td>
+                                    <td class="endpoint-path">/api/health</td>
+                                    <td>Health response</td>
+                                    <td><span class="auth-label public-auth">Public</span></td>
+                                    <td><button class="copy-button" type="button"
+                                        data-copy="/api/health" aria-label="Copy health endpoint">
+                                        <svg class="icon"><use href="#i-copy"/></svg>
+                                    </button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <footer class="main-footer">
+                    <span>CoreX Admin Console</span>
+                    <span>Data shown is illustrative until backend integration.</span>
+                    <a href="#overview">Back to top ↑</a>
+                </footer>
             </div>
-
-            <!-- <table class="recent-table-main">
-                <thead>
-                    <tr class="recent-table-head-row">
-                        <th class="recent-table-client-id-col">CLIENT-ID</th>
-                        <th class="recent-table-broker-col">BROKER</th>
-                        <th class="recent-table-timestamp-col">TIMESTAMP</th>
-                        <th class="recent-table-status-col">STATUS</th>
-                        <th class="recent-table-response-col">RESPONSE</th>
-                        <th class="recent-table-endpoint-col">ENDPOINT</th>
-                    </tr>
-                </thead>
-                <tbody>
-
-                </tbody>
-            </table> -->
-        </div>
+        </main>
     </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
