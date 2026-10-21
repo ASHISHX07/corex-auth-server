@@ -176,14 +176,24 @@ export default function createAdminRouter(env) {
 
     router.get("/requests", async (req, res) => {
         try {
-            const items = await getAdminRequests(
-                env,
-                req.query.limit
+            const result = await getAdminRequests(env, {
+                limit: req.query.limit,
+                cursor: req.query.cursor,
+                period: req.query.period
+            });
+    
+            return res.json(result);
+        } catch (error) {
+            if (error?.message === "invalid_request_cursor") {
+                return res.status(400).json({
+                    error: "invalid_request_cursor"
+                });
+            }
+    
+            return sendInternalError(
+                res,
+                "Admin request-log query failed"
             );
-
-            return res.json({ items });
-        } catch {
-            return sendInternalError(res, "Admin request-log query failed");
         }
     });
 

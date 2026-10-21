@@ -239,7 +239,7 @@
                     >×</button>
                 </div>
 
-                <section class="stats-grid" aria-label="Example metrics">
+                <section class="stats-grid" aria-label="Live request metrics">
                     <article class="stat-card">
                         <div class="stat-topline">
                             <span class="stat-label">TOTAL REQUESTS</span>
@@ -252,17 +252,13 @@
                             <span class="trend positive">LIVE</span>
                             <span id="request-period-caption">selected period</span>
                         </div>
-                        <div class="stat-sparkline spark-violet" aria-hidden="true">
-                            <span style="--bar:28%"></span>
-                            <span style="--bar:43%"></span>
-                            <span style="--bar:37%"></span>
-                            <span style="--bar:58%"></span>
-                            <span style="--bar:48%"></span>
-                            <span style="--bar:72%"></span>
-                            <span style="--bar:64%"></span>
-                            <span style="--bar:88%"></span>
-                            <span style="--bar:69%"></span>
-                            <span style="--bar:100%"></span>
+                        <div
+                            class="stat-sparkline spark-violet"
+                            id="requests-sparkline"
+                            aria-hidden="true"
+                        >
+                            <span></span><span></span><span></span><span></span><span></span>
+                            <span></span><span></span><span></span><span></span><span></span>
                         </div>
                     </article>
 
@@ -300,15 +296,11 @@
                             <span class="trend negative" id="failed-rate">0.0% of requests</span>
                             <span>in selected period</span>
                         </div>
-                        <div class="stat-mini-bars red-bars" aria-hidden="true">
-                            <span style="--bar:20%"></span>
-                            <span style="--bar:34%"></span>
-                            <span style="--bar:28%"></span>
-                            <span style="--bar:55%"></span>
-                            <span style="--bar:43%"></span>
-                            <span style="--bar:28%"></span>
-                            <span style="--bar:72%"></span>
-                            <span style="--bar:45%"></span>
+                        <div class="stat-mini-bars red-bars"
+                            id="failed-sparkline"
+                            aria-hidden="true">
+                            <span></span><span></span><span></span><span></span>
+                            <span></span><span></span><span></span><span></span>
                         </div>
                     </article>
 
@@ -327,11 +319,6 @@
                         <div class="stat-foot">
                             <span class="trend">MEAN</span>
                             <span>recorded request latency</span>
-                        </div>
-                        <div class="latency-line" aria-hidden="true">
-                            <svg viewBox="0 0 240 35" preserveAspectRatio="none">
-                                <path d="M0 26 L18 19 L37 23 L55 10 L75 18 L95 6 L112 15 L131 13 L151 24 L171 12 L190 17 L209 6 L225 10 L240 3"/>
-                            </svg>
                         </div>
                     </article>
                 </section>
@@ -354,7 +341,7 @@
                         </div>
 
                         <div class="chart-wrap" id="traffic-chart"
-                             role="img" aria-label="Illustrative request volume chart">
+                             role="img" aria-label="Recorded request volume chart">
                             <div class="chart-y-labels" aria-hidden="true">
                                 <span>0</span>
                                 <span>0</span>
@@ -477,17 +464,11 @@
                             </div>
                         </div>
 
-                        <div class="limit-item">
-                            <div>
-                                <strong>Admin login</strong>
-                                <span>Per login IP bucket</span>
-                            </div>
-                            <div class="limit-value">5 <span>/ min</span></div>
-                        </div>
-
                         <div class="panel-footnote">
                             <svg class="icon"><use href="#i-alert"/></svg>
-                            <span>Limits shown from configuration, not measured usage.</span>
+                            <span>
+                                These are configured components. Runtime health checks are not connected.
+                            </span>
                         </div>
                     </article>
                 </section>
@@ -497,14 +478,14 @@
                         <div>
                             <div class="panel-title">Recent requests</div>
                             <p class="panel-subtitle">
-                                Inspect sample API activity and responses
+                                Inspect recorded API activity for the selected period
                             </p>
                         </div>
 
                         <button class="button button-secondary button-small"
                                 id="export-button" type="button">
                             <svg class="icon"><use href="#i-download"/></svg>
-                            Export CSV
+                            <span id="export-button-label">Export CSV</span>
                         </button>
                     </div>
 
@@ -560,8 +541,21 @@
                     </div>
 
                     <div class="table-footer">
-                        <span id="request-count">Showing sample requests</span>
-                        <span class="table-footnote">Live D1 request logs</span>
+                        <span id="request-count">Loading request records...</span>
+                        <div class="request-footer-actions">
+                            <span class="table-footnote">
+                                Scroll to browse loaded rows. CSV covers the selected period.
+                            </span>
+                    
+                            <button
+                                class="button button-secondary button-small"
+                                id="load-more-requests"
+                                type="button"
+                                hidden
+                            >
+                                <span id="load-more-label">Load older requests</span>
+                            </button>
+                        </div>
                     </div>
                 </section>
 
@@ -765,6 +759,50 @@
                                 <span>Other API routes</span>
                                 <strong id="usage-other">0 · 0%</strong>
                             </div>
+                        </div>
+                    </article>
+
+                    <article class="panel usage-info-panel">
+                        <div class="panel-header">
+                            <div>
+                                <div class="panel-title">Rate limits</div>
+                                <p class="panel-subtitle">
+                                    Configured request limits, not measured traffic
+                                </p>
+                            </div>
+                            <span class="panel-chip">CONFIG</span>
+                        </div>
+                    
+                        <div class="limit-item">
+                            <div>
+                                <strong>Session creation</strong>
+                                <span>Per CoreX client</span>
+                            </div>
+                            <div class="limit-value">10 <span>/ min</span></div>
+                        </div>
+                    
+                        <div class="limit-item">
+                            <div>
+                                <strong>OAuth callback</strong>
+                                <span>Per source IP bucket</span>
+                            </div>
+                            <div class="limit-value">120 <span>/ min</span></div>
+                        </div>
+                    
+                        <div class="limit-item">
+                            <div>
+                                <strong>Admin login</strong>
+                                <span>Per login IP bucket</span>
+                            </div>
+                            <div class="limit-value">5 <span>/ min</span></div>
+                        </div>
+                    
+                        <div class="panel-footnote">
+                            <svg class="icon"><use href="#i-alert"/></svg>
+                            <span>
+                                Limits are read from the current service configuration; this panel
+                                does not measure rate-limit consumption.
+                            </span>
                         </div>
                     </article>
                 </section>

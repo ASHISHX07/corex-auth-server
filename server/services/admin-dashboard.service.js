@@ -23,6 +23,57 @@ function assertDatabase(env) {
     }
 }
 
+function encodeRequestCursor(record, endAt) {
+    const payload = JSON.stringify({
+        createdAt: Number(record.created_at),
+        requestId: String(record.request_id),
+        endAt: Number(endAt)
+    });
+
+    return btoa(payload)
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/g, "");
+}
+
+function decodeRequestCursor(value) {
+    if (!value) return null;
+
+    if (typeof value !== "string" || value.length > 512) {
+        throw new Error("invalid_request_cursor");
+    }
+
+    try {
+        const standard = value
+            .replace(/-/g, "+")
+            .replace(/_/g, "/");
+
+        const padded = standard + "=".repeat(
+            (4 - standard.length % 4) % 4
+        );
+
+        const parsed = JSON.parse(atob(padded));
+
+        if (
+            !Number.isSafeInteger(parsed.createdAt) ||
+            !Number.isSafeInteger(parsed.endAt) ||
+            typeof parsed.requestId !== "string" ||
+            !parsed.requestId ||
+            parsed.requestId.length > 100
+        ) {
+            throw new Error("invalid_request_cursor");
+        }
+
+        return {
+            createdAt: parsed.createdAt,
+            requestId: parsed.requestId,
+            endAt: parsed.endAt
+        };
+    } catch {
+        throw new Error("invalid_request_cursor");
+    }
+}
+
 export async function getAdminOverview(env, period = "24h") {
     assertDatabase(env);
 
@@ -74,6 +125,7 @@ export async function getAdminOverview(env, period = "24h") {
                 COALESCE(ROUND(AVG(duration_ms)), 0) AS average_latency_ms
             FROM request_logs
             WHERE created_at >= ? AND created_at <= ?
+            AND path NOT LIKE '/api/v1/admin/%'
         `).bind(startAt, now).first(),
 
         env.DB.prepare(`
@@ -86,6 +138,7 @@ export async function getAdminOverview(env, period = "24h") {
                 ), 0) AS successful
             FROM request_logs
             WHERE created_at >= ? AND created_at <= ?
+            AND path NOT LIKE '/api/v1/admin/%'
             GROUP BY bucket
         `).bind(startAt, bucketSeconds, startAt, now).all()
     ]);
@@ -163,10 +216,55 @@ export async function getAdminOverview(env, period = "24h") {
     };
 }
 
-export async function getAdminRequests(env, limitInput = 50) {
+export async function getAdminRequests(
+    env,
+    {
+        limit: limitInput = 25,
+        cursor: cursorInput = "",
+        period: periodInput = "24h"
+    } = {}
+) {
     assertDatabase(env);
 
-    const limit = normalizeLimit(limitInput);
+    const limit = normalizeLimit(limitInput, 25);
+    const cursor = decodeRequestCursor(cursorInput);
+
+    const period = ["24h", "7d", "30d"].includes(periodInput)
+        ? periodInput
+        : "24h";
+
+    const periodSeconds = {
+        "24h": 24 * 60 * 60,
+        "7d": 7 * 24 * 60 * 60,
+        "30d": 30 * 24 * 60 * 60
+    }[period];
+
+    // Freeze the export window across pages, even if new requests arrive.
+    const endAt = cursor?.endAt ?? Math.floor(Date.now() / 1000);
+    const startAt = endAt - periodSeconds;
+
+    const conditions = [
+        "r.path NOT LIKE '/api/v1/admin/%'",
+        "r.created_at >= ?",
+        "r.created_at <= ?"
+    ];
+
+    const parameters = [startAt, endAt];
+
+    if (cursor) {
+        conditions.push(
+            "(r.created_at < ? OR " +
+            "(r.created_at = ? AND r.request_id < ?))"
+        );
+
+        parameters.push(
+            cursor.createdAt,
+            cursor.createdAt,
+            cursor.requestId
+        );
+    }
+
+    parameters.push(limit + 1);
 
     const result = await env.DB.prepare(`
         SELECT
@@ -182,11 +280,22 @@ export async function getAdminRequests(env, limitInput = 50) {
         FROM request_logs AS r
         LEFT JOIN corex_clients AS c
             ON c.corex_client_id = r.corex_client_id
-        ORDER BY r.created_at DESC
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY r.created_at DESC, r.request_id DESC
         LIMIT ?
-    `).bind(limit).all();
+    `).bind(...parameters).all();
 
-    return result.results ?? [];
+    const fetched = result.results ?? [];
+    const hasMore = fetched.length > limit;
+    const items = fetched.slice(0, limit);
+    const lastItem = items[items.length - 1];
+
+    return {
+        items,
+        nextCursor: hasMore && lastItem
+            ? encodeRequestCursor(lastItem, endAt)
+            : null
+    };
 }
 
 export async function getAdminClients(

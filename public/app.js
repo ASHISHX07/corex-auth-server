@@ -10,7 +10,10 @@ const state = {
     overview: null,
     requests: [],
     sessions: [],
-    clients: []
+    clients: [],
+    requestCursor: null,
+    requestHasMore: false,
+    requestLoadingMore: false
 };
 
 const brokerNames = {
@@ -174,6 +177,12 @@ function setDashboardNotice(title, message, mode = "live") {
     setText("#dashboard-status-message", message);
 
     const notice = $("#dashboard-notice");
+
+    const statusTag = $("#data-mode-tag");
+    if (statusTag) statusTag.dataset.state = mode;
+
+    const sidebarMode = $(".sidebar-mode");
+    if (sidebarMode) sidebarMode.dataset.state = mode;
 
     if (notice) {
         notice.dataset.state = mode;
@@ -799,6 +808,45 @@ function updateUsage() {
     }
 }
 
+function renderMetricSparklines(chart) {
+    const data = Array.isArray(chart) ? chart : [];
+
+    const totals = data.map(item =>
+        Math.max(0, Number(item.total) || 0)
+    );
+
+    const failures = data.map(item =>
+        Math.max(
+            0,
+            (Number(item.total) || 0) -
+                (Number(item.successful) || 0)
+        )
+    );
+
+    function draw(selector, values, label) {
+        const bars = $$(`${selector} span`);
+        const maximum = Math.max(0, ...values);
+
+        bars.forEach((bar, index) => {
+            const dataIndex = Math.round(
+                index * (values.length - 1) /
+                Math.max(1, bars.length - 1)
+            );
+
+            const value = values[dataIndex] ?? 0;
+            const height = maximum > 0
+                ? value / maximum * 100
+                : 0;
+
+            bar.style.setProperty("--bar", `${height}%`);
+            bar.title = `${value} ${label}`;
+        });
+    }
+
+    draw("#requests-sparkline", totals, "requests");
+    draw("#failed-sparkline", failures, "failed requests");
+}
+
 function updateOverview(overview) {
     state.overview = overview;
 
@@ -851,6 +899,7 @@ function updateOverview(overview) {
 
     updateSessionSummary(overview.sessions);
     renderChart(overview);
+    renderMetricSparklines(overview.chart);
     updateUsage();
 }
 
@@ -1226,6 +1275,9 @@ function resetChartWhileLoading() {
             successBar.style.height = "0%";
         }
     });
+
+    $$("#requests-sparkline span, #failed-sparkline span")
+        .forEach(bar => bar.style.setProperty("--bar", "0%"));
 }
 
 function initDashboard() {
