@@ -39,8 +39,11 @@ export function requestLogger(env) {
     return (req, res, next) => {
         const path = req.path;
 
+        const isAdminConsoleApi =
+            path.startsWith("/api/v1/admin/");
+
         const shouldLog =
-            path.startsWith("/api/") ||
+            (path.startsWith("/api/") && !isAdminConsoleApi) ||
             path === "/auth/upstox/callback";
 
         if (!shouldLog) {

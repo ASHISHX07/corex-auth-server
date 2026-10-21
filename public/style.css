@@ -2605,3 +2605,39 @@ select option {
     color: var(--amber);
     background: var(--amber-soft);
 }
+
+/* Live dashboard states */
+
+.notice-hidden {
+    display: none !important;
+}
+
+.result-pill.active {
+    border-color: rgba(112, 217, 165, 0.13);
+    color: var(--green);
+    background: var(--green-soft);
+}
+
+.result-pill.revoked {
+    border-color: rgba(241, 143, 158, 0.13);
+    color: var(--red);
+    background: var(--red-soft);
+}
+
+#clients-body .button {
+    white-space: nowrap;
+}
+
+#clients-body button:disabled,
+#refresh-button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+#dashboard-notice[data-state="error"] {
+    border-color: rgba(241, 143, 158, 0.3);
+}
+
+#dashboard-notice[data-state="live"] {
+    border-color: rgba(112, 217, 165, 0.2);
+}
