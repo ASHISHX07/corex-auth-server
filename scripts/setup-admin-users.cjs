@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 
-const ITERATIONS = 600_000;
+const ITERATIONS = 25_000;
 const PASSWORD_MIN_LENGTH = 8;
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,64}$/;
 
