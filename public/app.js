@@ -538,6 +538,28 @@ function setupEvents() {
             }
         });
     });
+
+    const logoutButton = document.querySelector("#logout-button");
+
+    logoutButton?.addEventListener("click", async () => {
+        logoutButton.disabled = true;
+
+        try {
+            const response = await fetch("/api/v1/admin/logout", {
+                method: "POST",
+                credentials: "same-origin"
+            });
+
+            if (response.ok) {
+                window.location.replace("/login.html");
+                return;
+            }
+
+            logoutButton.disabled = false;
+        } catch {
+            logoutButton.disabled = false;
+        }
+    });
 }
 
 function initDashboard() {

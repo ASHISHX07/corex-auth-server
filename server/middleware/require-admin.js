@@ -1,5 +1,14 @@
-function constantTimeEqual(a, b) {
-    if (a.length !== b.length) {
+import {
+    readAdminSessionCookie,
+    verifyAdminSessionToken
+} from "../security/admin-session.js";
+
+function constantTimeEqualStrings(a, b) {
+    if (
+        typeof a !== "string" ||
+        typeof b !== "string" ||
+        a.length !== b.length
+    ) {
         return false;
     }
 
@@ -12,28 +21,94 @@ function constantTimeEqual(a, b) {
     return difference === 0;
 }
 
-export function requireAdmin(env) {
-    return (req, res, next) => {
-        const expected = env.COREX_ADMIN_API_KEY;
-        const authorization = req.get("authorization") ?? "";
-        const match = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(
-            authorization
+export function isSameOriginRequest(req) {
+    const origin = req.get("origin");
+    const host = req.get("host");
+
+    if (!origin || !host) {
+        return false;
+    }
+
+    try {
+        const originUrl = new URL(origin);
+
+        return (
+            originUrl.host.toLowerCase() === host.toLowerCase() &&
+            ["http:", "https:"].includes(originUrl.protocol)
         );
+    } catch {
+        return false;
+    }
+}
 
-        if (typeof expected !== "string" || expected.length !== 43) {
-            return res.status(503).json({
-                error: "admin_authentication_unavailable"
-            });
-        }
+export function requireSameOriginForCookieAdmin(req, res, next) {
+    // Safe read-only requests don't need this additional check.
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+        return next();
+    }
 
-        if (!match || !constantTimeEqual(match[1], expected)) {
-            res.set("WWW-Authenticate", "Bearer");
+    // Existing bearer-key API access remains usable by API clients.
+    if (req.adminAuth === "bearer") {
+        return next();
+    }
+
+    if (!isSameOriginRequest(req)) {
+        return res.status(403).json({
+            error: "Cross-origin request rejected."
+        });
+    }
+
+    return next();
+}
+
+export function requireAdmin(env) {
+    return async function adminAuthentication(req, res, next) {
+        try {
+            const authorization =
+                req.get("authorization") || "";
+
+            if (authorization.startsWith("Bearer ")) {
+                const suppliedKey = authorization.slice(7);
+                const expectedKey = env.COREX_ADMIN_API_KEY;
+
+                if (
+                    expectedKey &&
+                    constantTimeEqualStrings(suppliedKey, expectedKey)
+                ) {
+                    req.adminAuth = "bearer";
+                    req.adminUser = "admin-api";
+
+                    return next();
+                }
+
+                return res.status(401).json({
+                    error: "Unauthorized."
+                });
+            }
+
+            const sessionToken = readAdminSessionCookie(req);
+
+            if (sessionToken) {
+                const claims = await verifyAdminSessionToken(
+                    env,
+                    sessionToken
+                );
+
+                if (claims) {
+                    req.adminAuth = "cookie";
+                    req.adminUser = claims.sub;
+
+                    return next();
+                }
+            }
 
             return res.status(401).json({
-                error: "unauthorized"
+                error: "Unauthorized."
+            });
+        } catch {
+            return res.status(500).json({
+                error: "Authentication could not be completed."
             });
         }
-
-        return next();
     };
 }

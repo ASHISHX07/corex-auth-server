@@ -66,3 +66,41 @@ export function limitUpstoxCallbacks(env) {
         }
     };
 }
+
+export function limitAdminLogin(env) {
+    return async (req, res, next) => {
+        try {
+            if (!env.ADMIN_LOGIN_LIMITER) {
+                return res.status(503).json({
+                    error: "admin_login_limiter_unavailable"
+                });
+            }
+
+            const ip = req.get("cf-connecting-ip");
+
+            const key =
+                typeof ip === "string" && ip.length <= 64
+                    ? `ip:${ip}`
+                    : "local-development";
+
+            const { success } = await env.ADMIN_LOGIN_LIMITER.limit({
+                key
+            });
+
+            if (!success) {
+                res.set("Retry-After", "60");
+
+                return res.status(429).json({
+                    error: "rate_limit_exceeded",
+                    retryAfterSeconds: 60
+                });
+            }
+
+            return next();
+        } catch {
+            return res.status(503).json({
+                error: "rate_limiter_unavailable"
+            });
+        }
+    };
+}
