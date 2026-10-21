@@ -81,6 +81,8 @@ export default function createAdminRouter(env) {
                 });
             }
 
+            let stage = "verify_credentials";
+
             try {
                 const user = await verifyAdminCredentials(
                     env,
@@ -94,10 +96,14 @@ export default function createAdminRouter(env) {
                     });
                 }
 
+                stage = "create_session_token";
+
                 const token = await createAdminSessionToken(
                     env,
                     user.username
                 );
+
+                stage = "set_session_cookie";
 
                 setAdminSessionCookie(res, token, req);
 
@@ -107,7 +113,16 @@ export default function createAdminRouter(env) {
                     expiresIn: SESSION_TTL_SECONDS
                 });
             } catch (error) {
-                // Don't return configuration errors or secrets to the browser.
+                console.error("[admin-login] failed", {
+                    stage,
+                    errorName: error instanceof Error
+                        ? error.name
+                        : "UnknownError",
+                    errorMessage: error instanceof Error
+                        ? error.message.slice(0, 160)
+                        : "Non-Error rejection"
+                });
+
                 return res.status(503).json({
                     error: "Admin authentication is unavailable."
                 });
