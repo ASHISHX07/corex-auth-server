@@ -98,11 +98,15 @@
                 <a class="nav-link" href="#requests" data-nav="requests">
                     <svg class="icon"><use href="#i-activity"/></svg>
                     <span>Requests</span>
-                    <span class="nav-count">6</span>
+                    <span class="nav-count" id="nav-request-count">0</span>
                 </a>
                 <a class="nav-link" href="#sessions" data-nav="sessions">
                     <svg class="icon"><use href="#i-layers"/></svg>
                     <span>Sessions</span>
+                </a>
+                <a class="nav-link" href="#clients" data-nav="clients">
+                    <svg class="icon"><use href="#i-users"/></svg>
+                    <span>Clients</span>
                 </a>
                 <a class="nav-link" href="#providers" data-nav="providers">
                     <svg class="icon"><use href="#i-plug"/></svg>
@@ -126,8 +130,8 @@
             <div class="sidebar-mode">
                 <span class="mode-indicator"></span>
                 <div>
-                    <strong>Preview mode</strong>
-                    <span>Sample data only</span>
+                    <strong id="data-mode-title">Connecting</strong>
+                    <span id="data-mode-description">Loading live dashboard</span>
                 </div>
             </div>
 
@@ -146,9 +150,9 @@
                 </div>
 
                 <div class="topbar-actions">
-                    <span class="preview-tag">
+                    <span class="preview-tag" id="data-mode-tag">
                         <span></span>
-                        UI PREVIEW
+                        <span id="data-mode-label">CONNECTING</span>
                     </span>
 
                     <button class="icon-button" id="refresh-button"
@@ -208,19 +212,31 @@
                     </div>
                 </section>
 
-                <div class="preview-notice">
+                <div
+                    class="preview-notice"
+                    id="dashboard-notice"
+                    role="status"
+                    aria-live="polite"
+                >
                     <span class="notice-icon">
                         <svg class="icon"><use href="#i-alert"/></svg>
                     </span>
+
                     <p>
-                        <strong>Preview data</strong>
-                        <span>
-                            Metrics and records below are illustrative. Live D1 and
-                            analytics data will be connected later.
+                        <strong id="dashboard-status-title">
+                            Connecting to live data
+                        </strong>
+                        <span id="dashboard-status-message">
+                            Fetching metrics and records from the secured Admin API…
                         </span>
                     </p>
-                    <button type="button" class="notice-dismiss"
-                            id="dismiss-notice" aria-label="Dismiss preview notice">×</button>
+
+                    <button
+                        type="button"
+                        class="notice-dismiss"
+                        id="dismiss-notice"
+                        aria-label="Dismiss status"
+                    >×</button>
                 </div>
 
                 <section class="stats-grid" aria-label="Example metrics">
@@ -231,13 +247,10 @@
                                 <svg class="icon"><use href="#i-activity"/></svg>
                             </span>
                         </div>
-                        <div class="stat-value" data-stat="requests">12,846</div>
+                        <div class="stat-value" data-stat="requests">0</div>
                         <div class="stat-foot">
-                            <span class="trend positive">
-                                <svg class="icon"><use href="#i-arrow-up"/></svg>
-                                12.8%
-                            </span>
-                            <span>vs. previous period</span>
+                            <span class="trend positive">LIVE</span>
+                            <span id="request-period-caption">selected period</span>
                         </div>
                         <div class="stat-sparkline spark-violet" aria-hidden="true">
                             <span style="--bar:28%"></span>
@@ -260,16 +273,18 @@
                                 <svg class="icon"><use href="#i-check"/></svg>
                             </span>
                         </div>
-                        <div class="stat-value">94.9<span class="stat-unit">%</span></div>
-                        <div class="stat-foot">
-                            <span class="trend positive">
-                                <svg class="icon"><use href="#i-arrow-up"/></svg>
-                                2.4%
-                            </span>
-                            <span>vs. previous period</span>
+                        <div class="stat-value">
+                            <span data-stat="success-rate">0.0</span>
+                            <span class="stat-unit">%</span>
                         </div>
+
+                        <div class="stat-foot">
+                            <span class="trend positive" id="success-count">0 successful</span>
+                            <span>of total requests</span>
+                        </div>
+
                         <div class="progress-track stat-progress">
-                            <span style="width:94.9%"></span>
+                            <span id="success-progress" style="width:0%"></span>
                         </div>
                     </article>
 
@@ -280,10 +295,10 @@
                                 <svg class="icon"><use href="#i-alert"/></svg>
                             </span>
                         </div>
-                        <div class="stat-value">182</div>
+                        <div class="stat-value" data-stat="failed">0</div>
                         <div class="stat-foot">
-                            <span class="trend negative">1.2%</span>
-                            <span>of example traffic</span>
+                            <span class="trend negative" id="failed-rate">0.0% of requests</span>
+                            <span>in selected period</span>
                         </div>
                         <div class="stat-mini-bars red-bars" aria-hidden="true">
                             <span style="--bar:20%"></span>
@@ -304,13 +319,14 @@
                                 <svg class="icon"><use href="#i-clock"/></svg>
                             </span>
                         </div>
-                        <div class="stat-value">142<span class="stat-unit">ms</span></div>
+                        <div class="stat-value">
+                            <span data-stat="latency">0</span>
+                            <span class="stat-unit">ms</span>
+                        </div>
+
                         <div class="stat-foot">
-                            <span class="trend positive">
-                                <svg class="icon"><use href="#i-arrow-up"/></svg>
-                                8.6%
-                            </span>
-                            <span>faster in example data</span>
+                            <span class="trend">MEAN</span>
+                            <span>recorded request latency</span>
                         </div>
                         <div class="latency-line" aria-hidden="true">
                             <svg viewBox="0 0 240 35" preserveAspectRatio="none">
@@ -325,11 +341,11 @@
                         <div class="panel-header">
                             <div>
                                 <div class="panel-title">Request activity</div>
-                                <p class="panel-subtitle">
-                                    Illustrative request volume over time
+                                <p class="panel-subtitle" id="chart-subtitle">
+                                    Recorded request volume over the selected period
                                 </p>
                             </div>
-                            <span class="panel-chip">SAMPLE</span>
+                            <span class="panel-chip">LIVE</span>
                         </div>
 
                         <div class="chart-legend">
@@ -340,10 +356,10 @@
                         <div class="chart-wrap" id="traffic-chart"
                              role="img" aria-label="Illustrative request volume chart">
                             <div class="chart-y-labels" aria-hidden="true">
-                                <span>1.2k</span>
-                                <span>900</span>
-                                <span>600</span>
-                                <span>300</span>
+                                <span>0</span>
+                                <span>0</span>
+                                <span>0</span>
+                                <span>0</span>
                                 <span>0</span>
                             </div>
 
@@ -399,8 +415,8 @@
                         </div>
 
                         <div class="chart-footer">
-                            <span><span class="footer-status-dot"></span> Sample data loaded</span>
-                            <span id="chart-period-label">Last 24 hours</span>
+                            <span class="footer-status-dot"></span>
+                            <span id="chart-data-status">Waiting for D1 request logs</span>
                         </div>
                     </article>
 
@@ -408,7 +424,7 @@
                         <div class="panel-header">
                             <div>
                                 <div class="panel-title">Service configuration</div>
-                                <p class="panel-subtitle">Configured components</p>
+                                <p class="panel-subtitle">Inspect recorded API activity and responses</p>
                             </div>
                             <span class="subtle-icon">
                                 <svg class="icon"><use href="#i-layers"/></svg>
@@ -529,7 +545,7 @@
                             </thead>
                             <tbody id="requests-body">
                                 <tr>
-                                    <td colspan="7" class="loading-cell">Loading preview…</td>
+                                    <td colspan="8" class="loading-cell">Loading live request logs…</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -537,7 +553,7 @@
 
                     <div class="table-footer">
                         <span id="request-count">Showing sample requests</span>
-                        <span class="table-footnote">Illustrative records · not live logs</span>
+                        <span class="table-footnote">Live D1 request logs</span>
                     </div>
                 </section>
 
@@ -546,24 +562,35 @@
                         <div>
                             <div class="panel-title">Authentication sessions</div>
                             <p class="panel-subtitle">
-                                Sample session lifecycle overview
+                                Session lifecycle from D1
                             </p>
                         </div>
-                        <span class="panel-chip">SAMPLE</span>
+                        <span class="panel-chip">LIVE</span>
                     </div>
 
                     <div class="session-summary">
                         <div class="session-summary-item">
                             <span class="summary-bullet green-dot"></span>
-                            <div><strong>2</strong><span>Completed</span></div>
+                            <div>
+                                <strong data-session-stat="retrieved">0</strong>
+                                <span>Retrieved</span>
+                            </div>
                         </div>
+
                         <div class="session-summary-item">
                             <span class="summary-bullet violet-dot"></span>
-                            <div><strong>1</strong><span>Pending</span></div>
+                            <div>
+                                <strong data-session-stat="active">0</strong>
+                                <span>Active</span>
+                            </div>
                         </div>
+
                         <div class="session-summary-item">
                             <span class="summary-bullet amber-dot"></span>
-                            <div><strong>1</strong><span>Expired</span></div>
+                            <div>
+                                <strong data-session-stat="expired">0</strong>
+                                <span>Expired</span>
+                            </div>
                         </div>
                     </div>
 
@@ -580,6 +607,43 @@
                             </thead>
                             <tbody id="sessions-body">
                                 <tr><td colspan="5" class="loading-cell">Loading preview…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="section-anchor panel clients-panel" id="clients">
+                    <div class="panel-header">
+                        <div>
+                            <div class="panel-title">Registered CoreX clients</div>
+                            <p class="panel-subtitle" id="client-count-summary">
+                                Client status and session activity from D1
+                            </p>
+                        </div>
+
+                        <span class="panel-chip">LIVE</span>
+                    </div>
+
+                    <div class="table-scroll">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>CLIENT ID</th>
+                                    <th>DISPLAY NAME</th>
+                                    <th>STATUS</th>
+                                    <th>SESSIONS</th>
+                                    <th>OPEN SESSIONS</th>
+                                    <th>LAST SEEN</th>
+                                    <th>ACTION</th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="clients-body">
+                                <tr>
+                                    <td colspan="7" class="loading-cell">
+                                        Loading clients…
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -642,65 +706,57 @@
                     <article class="panel usage-panel">
                         <div class="panel-header">
                             <div>
-                                <div class="panel-title">API usage</div>
-                                <p class="panel-subtitle">Illustrative request consumption</p>
+                                <div class="panel-title">Recent API usage</div>
+                                <p class="panel-subtitle">
+                                    Endpoint mix across the latest logged requests
+                                </p>
                             </div>
-                            <span class="panel-chip">SAMPLE</span>
+
+                            <span class="panel-chip">LIVE</span>
                         </div>
 
                         <div class="usage-metric">
                             <div>
-                                <span class="usage-value">12,846</span>
-                                <span class="usage-caption">requests this period</span>
+                                <span class="usage-value" id="usage-total">0</span>
+                                <span class="usage-caption">latest logged requests</span>
                             </div>
-                            <span class="usage-percent">64.2%</span>
+
+                            <span class="usage-percent" id="usage-success-rate">
+                                0.0% success
+                            </span>
                         </div>
 
                         <div class="progress-track usage-progress">
-                            <span style="width:64.2%"></span>
+                            <span id="usage-progress" style="width:0%"></span>
                         </div>
 
                         <div class="usage-scale">
-                            <span>0</span>
-                            <span>Illustrative quota: 20,000</span>
+                            <span id="usage-scale-left">0 recent records</span>
+                            <span id="usage-scale-right">0 in selected period</span>
                         </div>
 
                         <div class="usage-divider"></div>
 
                         <div class="usage-breakdown">
-                            <div><span>Session creation</span><strong>58%</strong></div>
-                            <div><span>Callback handling</span><strong>27%</strong></div>
-                            <div><span>Result retrieval</span><strong>15%</strong></div>
-                        </div>
-                    </article>
-
-                    <article class="panel usage-info-panel">
-                        <div class="panel-header">
                             <div>
-                                <div class="panel-title">Rate limits</div>
-                                <p class="panel-subtitle">Configured Worker limits</p>
+                                <span>Session creation</span>
+                                <strong id="usage-session-create">0 · 0%</strong>
                             </div>
-                        </div>
 
-                        <div class="limit-item">
                             <div>
-                                <strong>Session creation</strong>
-                                <span>Per CoreX client</span>
+                                <span>OAuth callback</span>
+                                <strong id="usage-callback">0 · 0%</strong>
                             </div>
-                            <div class="limit-value">10 <span>/ min</span></div>
-                        </div>
 
-                        <div class="limit-item">
                             <div>
-                                <strong>Callback requests</strong>
-                                <span>Per callback IP bucket</span>
+                                <span>Result retrieval</span>
+                                <strong id="usage-result">0 · 0%</strong>
                             </div>
-                            <div class="limit-value">120 <span>/ min</span></div>
-                        </div>
 
-                        <div class="panel-footnote">
-                            <svg class="icon"><use href="#i-alert"/></svg>
-                            <span>Limits shown from configuration, not measured usage.</span>
+                            <div>
+                                <span>Other API routes</span>
+                                <strong id="usage-other">0 · 0%</strong>
+                            </div>
                         </div>
                     </article>
                 </section>
