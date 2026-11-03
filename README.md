@@ -19,30 +19,36 @@ Then follow [Quick start](#quick-start-for-a-registered-client).
 ## How it works
 
 ```mermaid
+
 sequenceDiagram
     autonumber
     participant C as CoreX instance
     participant S as CoreX Auth Server
-    participant U as User's browser
-    participant B as Broker (Upstox)
+    participant U as User browser
+    participant B as Broker Upstox
 
-    C->>C: generate throwaway ECDH P-256 keypair
-    C->>S: POST /api/v2/auth/sessions {broker, appId, appSecret, clientPublicKey}
-    S->>S: seal secret + public key into OAuth "state" (AES-256-GCM); store only a secret-free session row
-    S-->>C: {sessionId, authorizationUrl}
-    C->>U: open authorizationUrl
-    U->>B: log in and approve
-    B->>S: GET /auth/upstox/callback?code=...&state=...
-    S->>S: open state, atomically claim session (single use)
-    S->>B: POST token endpoint (code + secret)
-    B-->>S: access token
-    S->>S: encrypt token to the client's public key, store ciphertext only
-    S-->>U: "Authorization complete" page
-    loop every ~2 s
-        C->>S: GET /api/v2/auth/sessions/:id/result
-        S-->>C: 202 pending ... then 200 {encrypted}  (once; ciphertext deleted)
+    C->>C: Generate temporary ECDH P-256 keypair
+    C->>S: Create session with credentials and public key
+    S->>S: Seal broker secret and public key into OAuth state using AES-GCM
+    S->>S: Store only session metadata in D1
+    S-->>C: Return session ID and authorization URL
+
+    C->>U: Open authorization URL
+    U->>B: Sign in and approve
+    B->>S: Redirect to callback with code and sealed state
+
+    S->>S: Validate state and atomically claim session
+    S->>B: Exchange authorization code for access token
+    B-->>S: Return access token
+    S->>S: Encrypt token for client using ephemeral ECDH key
+    S-->>U: Show authorization complete page
+
+    loop Poll until result is ready
+        C->>S: Request session result
+        S-->>C: Return pending or encrypted result once
     end
-    C->>C: decrypt with private key -> access token
+
+    C->>C: Decrypt result using client private key
 ```
 
 ## What is public, private, and stored
