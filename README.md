@@ -136,7 +136,7 @@ The v1 endpoints still exist but are deprecated: [docs/api-v1-deprecated.md](doc
 
 Served by the same Worker; unauthenticated visitors to `/` go to `/login.html`.
 
-* Sessions table shows broker, **API version** (v1/v2), expiry and status: * v2 session statuses: *Awaiting broker*, *Processing token*, *Token ready*, *Encrypted result fetched*, *Failed*, and *Expired*. Legacy v1 sessions retain their original status labels., *Failed · <reason>*, *Expired*. It never shows tokens, secrets or codes.
+* Sessions table shows broker, **API version** (v1/v2), expiry and status. v2 statuses: *Awaiting broker*, *Processing token*, *Token ready*, *Encrypted result fetched*, *Failed · reason* and *Expired*. v1 sessions keep their original labels. It never shows tokens, secrets or codes.
 * Clients (search, inspect, **revoke**: also expires that client's open sessions), request log with CSV export, usage and rate-limit overview.
 * Passwords: PBKDF2-HMAC-SHA-256 with per-user salts. Session cookie: signed, 30 min, `HttpOnly`, `SameSite=Strict`, `Secure` on HTTPS. State-changing cookie requests enforce same-origin. CSP and `Referrer-Policy: no-referrer` are set.
 * An optional `COREX_ADMIN_API_KEY` allows scripted admin API access. Treat it as a high-privilege secret.

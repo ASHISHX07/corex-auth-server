@@ -1,6 +1,6 @@
 {
   "name": "corex-auth-server",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Cloudflare Worker that runs broker OAuth (incl. token exchange) for registered CoreX clients.",
   "main": "main.js",
   "scripts": {
@@ -15,7 +15,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "type": "module",
   "bugs": {
     "url": "https://github.com/ASHISHX07/corex-auth-server/issues"

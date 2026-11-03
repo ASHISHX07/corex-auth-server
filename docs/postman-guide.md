@@ -120,7 +120,7 @@ npx wrangler d1 execute corex-db --remote --command "SELECT status, failure_code
 ```
 
 Your row should be `retrieved`, `api_version` 2, and `NULL` in both `result_ciphertext` and `authorization_code`.
-The dashboard shows the same session as **Token delivered**.
+The dashboard shows the same session as **Encrypted result fetched**.
 
 ## Troubleshooting
 
