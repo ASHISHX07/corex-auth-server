@@ -1,5 +1,7 @@
 import { sha256Hex } from "../security/crypto.js";
 
+const LAST_SEEN_INTERVAL_SECONDS = 300;
+
 export function requireCorexClient(env) {
     return async (req, res, next) => {
         const authorization = req.get("authorization") ?? "";
@@ -17,7 +19,7 @@ export function requireCorexClient(env) {
 
             const client = await env.DB
                 .prepare(`
-                    SELECT corex_client_id, display_name
+                    SELECT corex_client_id, display_name, last_seen_at
                     FROM corex_clients
                     WHERE api_key_hash = ?
                       AND status = 'active'
@@ -34,20 +36,23 @@ export function requireCorexClient(env) {
 
             const now = Math.floor(Date.now() / 1000);
 
-            const update = await env.DB
-                .prepare(`
-                    UPDATE corex_clients
-                    SET last_seen_at = ?
-                    WHERE corex_client_id = ?
-                      AND status = 'active'
-                `)
-                .bind(now, client.corex_client_id)
-                .run();
+            // Only touch last_seen_at every 5 minutes: polling must not cost a D1 write per request.
+            if (!client.last_seen_at || now - client.last_seen_at >= LAST_SEEN_INTERVAL_SECONDS) {
+                const update = await env.DB
+                    .prepare(`
+                        UPDATE corex_clients
+                        SET last_seen_at = ?
+                        WHERE corex_client_id = ?
+                          AND status = 'active'
+                    `)
+                    .bind(now, client.corex_client_id)
+                    .run();
 
-            if (!update.success || update.meta.changes !== 1) {
-                return res.status(401).json({
-                    error: "unauthorized"
-                });
+                if (!update.success || update.meta.changes !== 1) {
+                    return res.status(401).json({
+                        error: "unauthorized"
+                    });
+                }
             }
 
             req.corexClient = {

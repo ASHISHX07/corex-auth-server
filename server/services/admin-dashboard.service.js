@@ -1,4 +1,6 @@
-const BROKERS = new Set(["upstox", "fyers", "zerodha"]);
+import { BROKER_IDS } from "../providers/provider-registry.js";
+
+const BROKERS = new Set(BROKER_IDS);
 const SESSION_STATUSES = new Set([
     "pending",
     "code_received",
@@ -421,7 +423,7 @@ export async function getAdminSessions(
             s.callback_received_at,
             s.code_retrieved_at,
             s.failure_code,
-            CASE WHEN s.authorization_code IS NULL
+            CASE WHEN s.authorization_code IS NULL AND s.result_ciphertext IS NULL
                 THEN 0 ELSE 1 END AS has_authorization_code
         FROM auth_sessions AS s
         LEFT JOIN corex_clients AS c
@@ -451,7 +453,7 @@ export async function getAdminSessionDetails(env, sessionId) {
             s.callback_received_at,
             s.code_retrieved_at,
             s.failure_code,
-            CASE WHEN s.authorization_code IS NULL
+            CASE WHEN s.authorization_code IS NULL AND s.result_ciphertext IS NULL
                 THEN 0 ELSE 1 END AS has_authorization_code
         FROM auth_sessions AS s
         LEFT JOIN corex_clients AS c
@@ -468,6 +470,7 @@ export async function invalidateAdminSession(env, sessionId) {
         SET
             status = 'expired',
             authorization_code = NULL,
+            result_ciphertext = NULL,
             failure_code = 'admin_invalidated'
         WHERE session_id = ?
           AND status IN ('pending', 'code_received')

@@ -47,7 +47,15 @@
 			}
 		},
 		{
-			"name": "UPSTOX_CALLBACK_LIMITER",
+			"name": "AUTH_POLL_LIMITER",
+			"namespace_id": "68420104",
+			"simple": {
+				"limit": 120,
+				"period": 60
+			}
+		},
+		{
+			"name": "CALLBACK_LIMITER",
 			"namespace_id": "68420102",
 			"simple": {
 				"limit": 120,
@@ -62,5 +70,10 @@
 				"period": 60
 			}
 		}
-	]
+	],
+	"triggers": {
+		"crons": [
+			"*/10 * * * *"
+		]
+	}
 }

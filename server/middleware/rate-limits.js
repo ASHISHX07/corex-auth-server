@@ -1,106 +1,35 @@
-export function limitSessionCreation(env) {
-    return async (req, res, next) => {
+function clientIpKey(req) {
+    const ip = req.get("cf-connecting-ip");
+    // Cloudflare sets this header at the edge; local dev shares one bucket.
+    return typeof ip === "string" && ip.length <= 64 ? `ip:${ip}` : "local-development";
+}
+
+function createLimiter(bindingName, keyOf, { json }) {
+    return env => async (req, res, next) => {
+        const unavailable = () => json
+            ? res.status(503).json({ error: "rate_limiter_unavailable" })
+            : res.status(503).send("Service temporarily unavailable.");
+
         try {
-            if (!env.AUTH_SESSION_LIMITER) {
-                return res.status(503).json({
-                    error: "rate_limiter_unavailable"
-                });
-            }
+            const limiter = env[bindingName];
+            if (!limiter) return unavailable();
 
-            const { success } = await env.AUTH_SESSION_LIMITER.limit({
-                key: req.corexClient.id
-            });
+            const { success } = await limiter.limit({ key: keyOf(req) });
+            if (success) return next();
 
-            if (!success) {
-                res.set("Retry-After", "60");
-
-                return res.status(429).json({
-                    error: "rate_limit_exceeded",
-                    retryAfterSeconds: 60
-                });
-            }
-
-            return next();
+            res.set("Retry-After", "60");
+            return json
+                ? res.status(429).json({ error: "rate_limit_exceeded", retryAfterSeconds: 60 })
+                : res.status(429).send("Too many requests. Please retry later.");
         } catch {
-            return res.status(503).json({
-                error: "rate_limiter_unavailable"
-            });
+            return unavailable();
         }
     };
 }
 
-export function limitUpstoxCallbacks(env) {
-    return async (req, res, next) => {
-        try {
-            if (!env.UPSTOX_CALLBACK_LIMITER) {
-                return res.status(503).send(
-                    "Callback service temporarily unavailable."
-                );
-            }
+const byClient = req => req.corexClient.id;
 
-            // Cloudflare sets this header for requests reaching its edge.
-            // For local development, use a shared local-test bucket.
-            const ip = req.get("cf-connecting-ip");
-            const key =
-                typeof ip === "string" && ip.length <= 64
-                    ? `ip:${ip}`
-                    : "local-development";
-
-            const { success } = await env.UPSTOX_CALLBACK_LIMITER.limit({
-                key
-            });
-
-            if (!success) {
-                res.set("Retry-After", "60");
-
-                return res.status(429).send(
-                    "Too many callback requests. Please retry later."
-                );
-            }
-
-            return next();
-        } catch {
-            return res.status(503).send(
-                "Callback service temporarily unavailable."
-            );
-        }
-    };
-}
-
-export function limitAdminLogin(env) {
-    return async (req, res, next) => {
-        try {
-            if (!env.ADMIN_LOGIN_LIMITER) {
-                return res.status(503).json({
-                    error: "admin_login_limiter_unavailable"
-                });
-            }
-
-            const ip = req.get("cf-connecting-ip");
-
-            const key =
-                typeof ip === "string" && ip.length <= 64
-                    ? `ip:${ip}`
-                    : "local-development";
-
-            const { success } = await env.ADMIN_LOGIN_LIMITER.limit({
-                key
-            });
-
-            if (!success) {
-                res.set("Retry-After", "60");
-
-                return res.status(429).json({
-                    error: "rate_limit_exceeded",
-                    retryAfterSeconds: 60
-                });
-            }
-
-            return next();
-        } catch {
-            return res.status(503).json({
-                error: "rate_limiter_unavailable"
-            });
-        }
-    };
-}
+export const limitSessionCreation = createLimiter("AUTH_SESSION_LIMITER", byClient, { json: true });
+export const limitSessionPolling = createLimiter("AUTH_POLL_LIMITER", byClient, { json: true });
+export const limitCallbacks = createLimiter("CALLBACK_LIMITER", clientIpKey, { json: false });
+export const limitAdminLogin = createLimiter("ADMIN_LOGIN_LIMITER", clientIpKey, { json: true });

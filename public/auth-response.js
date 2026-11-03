@@ -42,15 +42,14 @@ const outcomes = {
     received: {
         tone: "success",
         icon: "✓",
-        eyebrow: "AUTHORIZATION CODE RECEIVED",
+        eyebrow: "AUTHORIZATION COMPLETE",
         title: "You're almost connected",
         description:
             "Your broker returned an authorization response. " +
             "you can close this tab and continue to CoreX app",
         steps: [
             "Return to the CoreX application.",
-            "CoreX will securely retrieve the authorization result.",
-            "CoreX will finish the token exchange and confirm the connection."
+            "CoreX will securely retrieve the encrypted authorization result."
         ],
         note:
             "The authorization response was received, but this page alone " +
@@ -130,7 +129,11 @@ const root = document.documentElement;
 const brokerKey = root.dataset.corexBroker || "corex";
 const statusKey = root.dataset.corexStatus || "invalid";
 
-const broker = brokers[brokerKey] || brokers.corex;
+const broker = brokers[brokerKey] || (
+    /^[a-z0-9_-]{2,32}$/.test(brokerKey)
+        ? { name: brokerKey, mark: brokerKey.slice(0, 2).toUpperCase(), badge: brokerKey.toUpperCase() }
+        : brokers.corex
+);
 const outcome = outcomes[statusKey] || outcomes.invalid;
 
 function setText(id, value) {

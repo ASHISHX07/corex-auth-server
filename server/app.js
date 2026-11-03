@@ -3,7 +3,8 @@ import express from "express";
 import healthRouter from "./routes/health.routes.js";
 import createAuthRouter from "./routes/auth.routes.js";
 import createAuthResponseRouter from "./routes/auth-response.routes.js";
-import createUpstoxCallbackRouter from "./routes/callbacks/upstox.routes.js";
+import createAuthV2Router from "./routes/auth-v2.routes.js";
+import createBrokerCallbackRouter from "./routes/callbacks/broker-callback.routes.js";
 import createAdminRouter from "./routes/admin.routes.js";
 import { requestLogger } from "./middleware/request-logger.js";
 import {
@@ -24,14 +25,15 @@ export function createApp(env) {
 
     app.use(requestLogger(env));
     app.use("/api/health", healthRouter);
-    app.use("/api/v1/auth", createAuthRouter(env));
+    app.use("/api/v1/auth", createAuthRouter(env)); // deprecated: client exchanges the code itself
+    app.use("/api/v2/auth", createAuthV2Router(env));
     app.use("/api/v1/admin", createAdminRouter(env));
 
     // Shared browser-facing authorization page.
     app.use("/auth", createAuthResponseRouter(env));
 
-    // Broker-specific callback processing.
-    app.use("/auth/upstox", createUpstoxCallbackRouter(env));
+    // Callback for every registered broker: /auth/:broker/callback
+    app.use("/auth/:broker", createBrokerCallbackRouter(env));
 
     app.get(
         ["/", "/index.html", "/dashboard.html"],

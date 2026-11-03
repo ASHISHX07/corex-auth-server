@@ -178,7 +178,9 @@ async function main() {
 
     updateEnvFile({
         COREX_ADMIN_USERS: encodedUsers,
-        COREX_ADMIN_SESSION_SECRET: sessionSecret
+        COREX_ADMIN_SESSION_SECRET: sessionSecret,
+        // Seals OAuth state (v2). Rotating it only invalidates in-flight logins.
+        COREX_STATE_KEY: crypto.randomBytes(32).toString("base64url")
     });
 
     console.log("Admin configuration written to .env.");

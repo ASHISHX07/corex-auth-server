@@ -17,6 +17,7 @@ export async function revokeCorexClient(env, clientId) {
             SET
                 status = 'expired',
                 authorization_code = NULL,
+                result_ciphertext = NULL,
                 failure_code = 'client_revoked'
             WHERE corex_client_id = ?
               AND status IN ('pending', 'code_received')

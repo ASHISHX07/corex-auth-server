@@ -1,8 +1,8 @@
 # CoreX Auth Server
 
-CoreX Auth Server is a Cloudflare Workers service that helps registered CoreX clients complete an Upstox OAuth authorization flow. It creates a short-lived session, sends the user to Upstox, receives the callback, and lets the client retrieve the one-time authorization code. A protected Admin Console shows clients, OAuth sessions, and recorded API requests.
+CoreX Auth Server is a Cloudflare Workers service that completes broker OAuth flows for registered CoreX clients. **API v2 runs the entire flow on the server, including the token exchange**, and hands the client an access token that is end-to-end encrypted to that client, so the server never stores the broker secret or a readable token. A protected Admin Console shows clients, OAuth sessions, and recorded API requests.
 
-> **Current scope:** Upstox is the only implemented broker. CoreX returns the authorization code; the integrating client exchanges it with Upstox for an access token.
+> **Current scope:** Upstox is the only implemented broker. Adding another is one provider file ([docs/adding-a-broker.md](docs/adding-a-broker.md)). API v1 (client exchanges the code itself) still works but is deprecated.
 
 ## Deployment
 
@@ -17,16 +17,26 @@ CoreX Auth Server is a Cloudflare Workers service that helps registered CoreX cl
 
 These values match the current `wrangler.jsonc`. If the Worker domain or name changes, update the Upstox Developer App's redirect URI and the configured `UPSTOX_REDIRECT_URI` to match exactly.
 
-## How it works
+## How it works (v2)
 
-1. A registered CoreX client creates a session using its CoreX API key.
-2. CoreX returns a session ID, a private retrieval secret, and an Upstox authorization URL.
-3. The user opens that URL and signs in to Upstox.
-4. Upstox redirects to CoreX. CoreX validates the returned `state` and records the authorization code.
-5. The client retrieves the code once using the session ID and that session's retrieval secret.
-6. The client exchanges the code directly with Upstox for a token.
+1. The client generates an ECDH P-256 keypair and calls `POST /api/v2/auth/sessions` with its CoreX API key, the broker app id and secret, and its **public** key.
+2. The server seals the secret and public key into the OAuth `state` (AES-256-GCM, key = Worker secret `COREX_STATE_KEY`). Only a session row (no secrets) is written to D1. The client receives an `authorizationUrl`.
+3. The user signs in at the broker, which redirects to `/auth/<broker>/callback`.
+4. The server opens the `state`, atomically claims the session (a replayed callback cannot reach the exchange), exchanges the code for a token, and **encrypts the token to the client's public key**.
+5. The client polls `GET /api/v2/auth/sessions/:id/result` and decrypts the response locally. Retrieval is one-time and the ciphertext is wiped immediately.
 
-Sessions expire after **five minutes**. Always use the `authorizationUrl`, `sessionId`, and `retrievalSecret` from the same create-session response. Polling the result endpoint does not complete browser authorization.
+See [docs/client-integration.md](docs/client-integration.md) and the runnable [docs/client-example.mjs](docs/client-example.mjs).
+
+What is and isn't stored:
+
+| Item | At rest on the server? |
+|---|---|
+| Broker app secret | No. Exists only inside the sealed `state` and in memory during the callback. |
+| Authorization code | No. Used in memory for the exchange only. |
+| Access token | Only as ciphertext only the client can read (up to ~5 min, deleted on first fetch, wiped by cron if never fetched). |
+| Broker app id, session status, timestamps | Yes (needed for the admin console). |
+
+Sessions expire after **five minutes** (plus a 60 second grace window to fetch a ready result).
 
 ## Broker support
 
@@ -44,9 +54,17 @@ All paths are relative to the production base URL above.
 
 Public health check. Returns `healthy: true` and a timestamp.
 
-### `POST /api/v1/auth/sessions`
+### `POST /api/v2/auth/sessions`
 
-Creates a broker authorization session. Requires the **CoreX client API key** as a bearer token.
+Creates a v2 session. Requires the CoreX client API key as bearer token. Body: `{ "broker", "appId", "appSecret", "clientPublicKey" }`. Returns `201` with `sessionId`, `authorizationUrl`, `expiresInSeconds`, `expiresAt`. Errors: `400 invalid_request | unsupported_broker`, `401`, `429`, `503`.
+
+### `GET /api/v2/auth/sessions/:sessionId/result`
+
+Requires the **same CoreX client key** that created the session (other clients get `404`). `202` pending, `200` completed with `encrypted` (see the client guide), `409` failed, `410` expired or already retrieved.
+
+### `POST /api/v1/auth/sessions` (deprecated)
+
+Creates a v1 broker authorization session. Requires the **CoreX client API key** as a bearer token.
 
 Headers:
 
@@ -87,7 +105,7 @@ Code retrieval is one-time. Save the code securely and exchange it promptly.
 
 ### Browser callback and status page
 
-- `GET /auth/upstox/callback` — configured as the Upstox redirect URI. Receives the broker callback; users should not call this manually.
+- `GET /auth/:broker/callback` (e.g. `/auth/upstox/callback`) — configured as the broker redirect URI. Receives the broker callback; users should not call this manually.
 - `GET /auth/response` — displays a safe authorization status page. A `received` status confirms that CoreX accepted the callback; it does not prove that a token was issued.
 
 ### Admin API
@@ -171,7 +189,9 @@ Cloudflare D1 stores:
 - `auth_sessions` — OAuth session status and lifecycle timestamps.
 - `request_logs` — method, path, HTTP status, duration, and optional client/broker information.
 
-The request logger records `/api/*` requests except `/api/v1/admin/*`, plus `/auth/upstox/callback`. Static assets and admin-dashboard API calls are intentionally excluded. Metrics cover records actually written to D1; previous traffic is not backfilled. Logging is best-effort, so an application request can succeed even if its log insert fails.
+The request logger records `/api/*` requests except `/api/v1/admin/*`, plus `/auth/upstox/callback`. Static assets and admin-dashboard API calls are intentionally excluded. Metrics cover records actually written to D1; previous traffic is not backfilled. Polling that returns `202 pending` is not logged, to conserve D1 writes. Logging is best-effort, so an application request can succeed even if its log insert fails.
+
+A Cron Trigger (every 10 minutes) expires stale sessions, wipes any leftover ciphertext, and prunes request logs older than 30 days and finished sessions older than 90 days (constants in `server/services/maintenance.service.js`).
 
 ## Configuration and local development
 
@@ -198,13 +218,13 @@ Requirements: Node.js, npm, a Cloudflare account for remote deployment, and an U
    npm run dev
    ```
 
-   Local D1 data is separate from production D1. Migrations create tables but do not copy production data. An active CoreX client must exist in the target database to create OAuth sessions.
+   Run the offline test suite with `npm test` (Node 22.5+). Local D1 data is separate from production D1. Migrations create tables but do not copy production data. An active CoreX client must exist in the target database to create OAuth sessions.
 
 ### Production setup and deployment
 
-Configure the required Worker secrets `COREX_ADMIN_USERS` and `COREX_ADMIN_SESSION_SECRET`. Configure `COREX_ADMIN_API_KEY` only if bearer-based admin API access is needed. Set `UPSTOX_REDIRECT_URI` to the exact callback URL registered in Upstox. Keep secrets out of source control.
+Configure the required Worker secrets `COREX_ADMIN_USERS`, `COREX_ADMIN_SESSION_SECRET` and `COREX_STATE_KEY` (32 random bytes, base64url; e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))" | npx wrangler secret put COREX_STATE_KEY`). Rotating `COREX_STATE_KEY` only invalidates logins in flight. Configure `COREX_ADMIN_API_KEY` only if bearer-based admin API access is needed. Set `UPSTOX_REDIRECT_URI` to the exact callback URL registered in Upstox. Keep secrets out of source control.
 
-Review migrations before applying them to the remote database, then deploy the intended commit:
+Migration `0004` rebuilds `auth_sessions` (existing v1 rows are copied over). Review it, then apply and deploy:
 
 ```bash
 npx wrangler d1 migrations apply corex-db --remote
@@ -216,7 +236,8 @@ Do not deploy an untested working tree. After deployment, verify admin login, `G
 ## Security notes and limitations
 
 - Never expose CoreX client keys, admin credentials, Upstox secrets, retrieval secrets, authorization codes, or access tokens.
-- Only the Upstox OAuth flow is implemented at this revision; no token storage or refresh-token management is provided.
+- Only the Upstox OAuth flow is implemented. Tokens are never stored in readable form and there is no refresh-token handling (Upstox has none; tokens expire daily at 03:30 IST).
+- The server necessarily sees the broker secret in memory while handling a request, since it performs the exchange. Anyone who can change the deployed Worker code could capture it; protect Cloudflare account access accordingly.
 - Client provisioning is an operator task; there is no client-creation API in this repository.
 - Session creation is rate-limited per client; Upstox callbacks and admin login have separate configured rate limits in `wrangler.jsonc`.
 - Request-log retention, backups, and operational monitoring should be decided before running the service at larger scale.

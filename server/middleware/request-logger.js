@@ -1,12 +1,20 @@
 import { waitUntil } from "cloudflare:workers";
 
-const ALLOWED_BROKERS = new Set(["upstox", "fyers", "zerodha"]);
+import { BROKER_IDS } from "../providers/provider-registry.js";
+
+const ALLOWED_BROKERS = new Set(BROKER_IDS);
+const CALLBACK_PATH = /^\/auth\/([a-z0-9_-]{2,32})\/callback$/;
+const RESULT_PATH = /^\/api\/v\d+\/auth\/sessions\/[^/]+\/result$/;
 
 function normalizePath(path) {
     const patterns = [
         [
             /^\/api\/v1\/auth\/sessions\/[^/]+\/result$/,
             "/api/v1/auth/sessions/:sessionId/result"
+        ],
+        [
+            /^\/api\/v2\/auth\/sessions\/[^/]+\/result$/,
+            "/api/v2/auth/sessions/:sessionId/result"
         ],
         [
             /^\/api\/v1\/admin\/clients\/[^/]+\/revoke$/,
@@ -44,7 +52,7 @@ export function requestLogger(env) {
 
         const shouldLog =
             (path.startsWith("/api/") && !isAdminConsoleApi) ||
-            path === "/auth/upstox/callback";
+            CALLBACK_PATH.test(path);
 
         if (!shouldLog) {
             return next();
@@ -57,6 +65,11 @@ export function requestLogger(env) {
                 return;
             }
 
+            // Polling ("still pending") would otherwise burn a D1 write per request.
+            if (res.statusCode === 202 && RESULT_PATH.test(path)) {
+                return;
+            }
+
             const now = Math.floor(Date.now() / 1000);
             const brokerFromBody =
                 typeof req.body?.broker === "string"
@@ -65,9 +78,10 @@ export function requestLogger(env) {
 
             const broker = ALLOWED_BROKERS.has(brokerFromBody)
                 ? brokerFromBody
-                : path === "/auth/upstox/callback"
-                    ? "upstox"
-                    : null;
+                : (() => {
+                    const fromPath = CALLBACK_PATH.exec(path)?.[1];
+                    return ALLOWED_BROKERS.has(fromPath) ? fromPath : null;
+                })();
 
             const normalizedPath = normalizePath(path);
             const clientId = req.corexClient?.id ?? null;

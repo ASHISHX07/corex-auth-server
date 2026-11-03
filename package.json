@@ -1,12 +1,13 @@
 {
   "name": "corex-auth-server",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
     "start": "node main.js",
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
+    "dev": "wrangler dev",
+    "test": "node --import ./test/register.mjs --disable-warning=ExperimentalWarning test/e2e.test.mjs"
   },
   "repository": {
     "type": "git",
@@ -26,5 +27,8 @@
   },
   "devDependencies": {
     "wrangler": "^4.151.0"
+  },
+  "engines": {
+    "node": ">=22.5"
   }
 }
