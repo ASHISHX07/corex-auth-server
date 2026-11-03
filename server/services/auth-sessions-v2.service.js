@@ -74,9 +74,30 @@ export async function completeAuthSessionV2(env, provider, { state, code, error 
     if (typeof error === "string" && error.length > 0) {
         const denied = await env.DB.prepare(`
             UPDATE auth_sessions
-            SET status = 'failed', failure_code = 'authorization_denied', callback_received_at = ?
-            WHERE session_id = ? AND api_version = 2 AND status = 'pending'
-        `).bind(now, claims.sid).run();
+            SET
+                status = 'failed',
+                failure_code = 'authorization_denied',
+                callback_received_at = ?
+            WHERE session_id = ?
+                AND api_version = 2
+                AND status = 'pending'
+                AND expires_at > ?
+                AND corex_client_id = ?
+                AND broker = ?
+                AND provider_app_id = ?
+                AND EXISTS (
+                    SELECT 1 FROM corex_clients c
+                    WHERE c.corex_client_id = auth_sessions.corex_client_id
+                      AND c.status = 'active'
+                )
+        `).bind(
+            now,
+            claims.sid,
+            now,
+            claims.cid,
+            claims.b,
+            claims.aid
+        ).run();
 
         return denied.meta.changes === 1 ? "failed" : "invalid";
     }
@@ -88,7 +109,6 @@ export async function completeAuthSessionV2(env, provider, { state, code, error 
         UPDATE auth_sessions
         SET status = 'code_received', callback_received_at = ?
         WHERE session_id = ?
-        WHERE session_id = ?
             AND api_version = 2
             AND status = 'pending'
             AND expires_at > ?
@@ -97,9 +117,17 @@ export async function completeAuthSessionV2(env, provider, { state, code, error 
             AND provider_app_id = ?
             AND EXISTS (
                 SELECT 1 FROM corex_clients c
-                WHERE c.corex_client_id = auth_sessions.corex_client_id AND c.status = 'active'
+                WHERE c.corex_client_id = auth_sessions.corex_client_id
+                  AND c.status = 'active'
             )
-    `).bind(now, claims.sid, now).run();
+    `).bind(
+        now,
+        claims.sid,
+        now,
+        claims.cid,
+        claims.b,
+        claims.aid
+    ).run();
 
     if (!claim.success || claim.meta.changes !== 1) return "invalid";
 
