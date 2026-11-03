@@ -1104,7 +1104,7 @@ async function loadDashboardData() {
     setText("#request-count", "Loading request records…");
     updateLoadMoreButton();
 
-    // if (refreshButton) refreshButton.disabled = false;
+    if (refreshButton) refreshButton.disabled = true;
 
     setDashboardNotice(
         "Loading live data",
