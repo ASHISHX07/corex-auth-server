@@ -5,9 +5,48 @@ import {
 } from "../services/auth-sessions-v2.service.js";
 import { requireCorexClient } from "../middleware/require-corex-client.js";
 import { limitSessionCreation, limitSessionPolling } from "../middleware/rate-limits.js";
+import { BROKER_IDS } from "../providers/provider-registry.js";
 
-const isString = (value, max) =>
-    typeof value === "string" && value.length > 0 && value.length <= max;
+const FIELD_MAX_LENGTH = { broker: 32, appId: 200, appSecret: 512, clientPublicKey: 128 };
+
+const FIELD_HELP = {
+    appId: "must be the broker app's API key / client id.",
+    appSecret: "must be the broker app's API secret.",
+    clientPublicKey:
+        "must be the base64url raw P-256 public key printed by `node tools/keygen.mjs` " +
+        "(copy it exactly, with no spaces or line breaks)."
+};
+
+// Error bodies name the field only. They never echo a submitted value.
+function badRequest(res, field, message) {
+    return res.status(400).json({ error: "invalid_request", field, message });
+}
+
+/** Returns an error description for the first bad field, or null. */
+function findInvalidField(body) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return { field: null, message: "Body must be a JSON object. Send Content-Type: application/json." };
+    }
+
+    for (const [field, max] of Object.entries(FIELD_MAX_LENGTH)) {
+        const value = body[field];
+
+        if (typeof value !== "string" || value.trim().length === 0) {
+            return { field, message: `"${field}" is required and must be a non-empty string.` };
+        }
+        if (value.length > max) {
+            return { field, message: `"${field}" is too long (max ${max} characters).` };
+        }
+        if (/\{\{.*\}\}/.test(value)) {
+            return {
+                field,
+                message: `"${field}" still contains a {{placeholder}}. Select your Postman environment and fill in that variable.`
+            };
+        }
+    }
+
+    return null;
+}
 
 export default function createAuthV2Router(env) {
     const router = Router();
@@ -18,21 +57,20 @@ export default function createAuthV2Router(env) {
     });
 
     router.post("/sessions", requireCorexClient(env), limitSessionCreation(env), async (req, res) => {
-        const { broker, appId, appSecret, clientPublicKey } = req.body ?? {};
+        const invalid = findInvalidField(req.body);
 
-        if (
-            !isString(broker, 32) || !isString(appId, 200) ||
-            !isString(appSecret, 512) || !isString(clientPublicKey, 128)
-        ) {
-            return res.status(400).json({ error: "invalid_request" });
+        if (invalid) {
+            return badRequest(res, invalid.field, invalid.message);
         }
+
+        const { broker, appId, appSecret, clientPublicKey } = req.body;
 
         try {
             const session = await createAuthSessionV2(env, {
                 broker: broker.trim().toLowerCase(),
                 appId: appId.trim(),
                 appSecret,
-                clientPublicKey,
+                clientPublicKey: clientPublicKey.trim(),
                 corexClientId: req.corexClient.id
             });
 
@@ -40,10 +78,17 @@ export default function createAuthV2Router(env) {
         } catch (error) {
             // Never log the request body, secrets, state or URLs.
             if (error.code === "UNSUPPORTED_BROKER") {
-                return res.status(400).json({ error: "unsupported_broker" });
+                return res.status(400).json({
+                    error: "unsupported_broker",
+                    message: `Supported brokers: ${BROKER_IDS.join(", ")}.`
+                });
             }
             if (error.code === "INVALID_REQUEST") {
-                return res.status(400).json({ error: "invalid_request" });
+                return badRequest(
+                    res,
+                    error.field ?? null,
+                    `"${error.field}" ${FIELD_HELP[error.field] ?? "is invalid."}`
+                );
             }
 
             console.error("Session creation failed:", error instanceof Error ? error.message : "Unknown error");

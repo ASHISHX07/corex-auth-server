@@ -532,6 +532,7 @@ function renderRequests() {
 
 function sessionView(session) {
     const now = Math.floor(Date.now() / 1000);
+    const isV2 = Number(session.api_version) === 2;
 
     let status = session.status || "unknown";
     let label = status.replaceAll("_", " ");
@@ -539,7 +540,7 @@ function sessionView(session) {
 
     if (status === "retrieved") {
         status = "completed";
-        label = "Retrieved";
+        label = isV2 ? "Token delivered" : "Retrieved";
         css = "completed";
     } else if (status === "pending" || status === "code_received") {
         if (Number(session.expires_at) <= now) {
@@ -548,22 +549,33 @@ function sessionView(session) {
             css = "expired";
         } else {
             css = "pending";
-            label = status === "code_received"
-                ? "Code received"
-                : "Pending";
+
+            if (status === "pending") {
+                label = "Waiting for login";
+            } else if (isV2) {
+                // v2: callback arrived; token is either being exchanged or ready to fetch.
+                label = Number(session.has_authorization_code)
+                    ? "Token ready"
+                    : "Exchanging";
+            } else {
+                label = "Code received";
+            }
         }
     } else if (status === "expired") {
         css = "expired";
         label = "Expired";
     } else if (status === "failed") {
         css = "error";
-        label = "Failed";
+        // failure_code is a fixed, non-sensitive reason (e.g. exchange_rejected).
+        label = session.failure_code
+            ? `Failed · ${session.failure_code}`
+            : "Failed";
     }
 
     let expires = "—";
 
     if (status === "completed") {
-        expires = "Retrieved";
+        expires = "Delivered";
     } else if (status === "expired") {
         expires = "Expired";
     } else if (
@@ -591,7 +603,7 @@ function renderSessions() {
     if (!state.sessions.length) {
         renderTableMessage(
             "#sessions-body",
-            5,
+            6,
             "No OAuth sessions have been recorded yet."
         );
         return;
@@ -607,6 +619,12 @@ function renderSessions() {
         const brokerCell = document.createElement("td");
         setBrokerCell(brokerCell, session.broker);
         row.appendChild(brokerCell);
+
+        appendCell(
+            row,
+            Number(session.api_version) === 2 ? "v2" : "v1 (legacy)",
+            "time-cell"
+        );
 
         appendCell(
             row,
@@ -906,9 +924,9 @@ function updateUsage() {
     for (const request of recent) {
         const path = String(request.path || "");
 
-        if (path === "/api/v1/auth/sessions") {
+        if (/^\/api\/v\d+\/auth\/sessions$/.test(path)) {
             categories.sessionCreate++;
-        } else if (path === "/auth/upstox/callback") {
+        } else if (/^\/auth\/[a-z0-9_-]+\/callback$/.test(path)) {
             categories.callback++;
         } else if (path.endsWith("/result")) {
             categories.result++;

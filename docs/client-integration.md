@@ -13,7 +13,7 @@ private key can decrypt it. Keep the private key in memory for the duration of t
 
 ## Flow
 
-1. Generate an ECDH P-256 keypair. Export the public key as the **raw uncompressed point**
+1. Generate an ECDH P-256 keypair (`node tools/keygen.mjs` does this for manual testing). Export the public key as the **raw uncompressed point**
    (65 bytes, starts with `0x04`), base64url-encoded.
 2. `POST /api/v2/auth/sessions` with `Authorization: Bearer <COREX_CLIENT_API_KEY>`:
    ```json

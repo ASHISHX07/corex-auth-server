@@ -18,15 +18,17 @@ export async function createAuthSessionV2(env, { broker, appId, appSecret, clien
 
     if (!provider) throw Object.assign(new Error("Unsupported broker"), { code: "UNSUPPORTED_BROKER" });
 
-    if (!provider.validateCredentials({ appId, appSecret })) {
-        throw Object.assign(new Error("Invalid credentials"), { code: "INVALID_REQUEST" });
+    const badField = provider.validateCredentials({ appId, appSecret });
+
+    if (badField) {
+        throw Object.assign(new Error("Invalid credentials"), { code: "INVALID_REQUEST", field: badField });
     }
 
     // Fail now, not after the one-time code has been spent.
     try {
         await importClientPublicKey(clientPublicKey);
     } catch {
-        throw Object.assign(new Error("Invalid public key"), { code: "INVALID_REQUEST" });
+        throw Object.assign(new Error("Invalid public key"), { code: "INVALID_REQUEST", field: "clientPublicKey" });
     }
 
     const sessionId = crypto.randomUUID();

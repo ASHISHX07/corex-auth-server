@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 import { webcrypto as crypto } from "node:crypto";
 import { createD1 } from "./d1-shim.mjs";
 import { createApp } from "../server/app.js";
@@ -10,7 +11,7 @@ const APP_SECRET = "SUPER-SECRET-VALUE-XYZ";
 const ACCESS_TOKEN = "eyJ.fake.ACCESS-TOKEN-PLAINTEXT";
 const REDIRECT = "https://corex-server.example.workers.dev/auth/upstox/callback";
 
-const db = createD1(new URL("../db/migrations", import.meta.url).pathname);
+const db = createD1(fileURLToPath(new URL("../db/migrations", import.meta.url)));
 const limiter = { limit: async () => ({ success: true }) };
 const env = {
     DB: db, UPSTOX_REDIRECT_URI: REDIRECT,
@@ -168,6 +169,49 @@ await test("input validation: bad key, missing secret, unknown broker", async ()
     const unk = await startSession(keys, { broker: "nobroker" });
     assert.equal(unk.r.status, 400); assert.equal(unk.body.error, "unsupported_broker");
     assert.equal((await call("/api/v2/auth/sessions", { method: "POST", key: null, body: {} })).status, 401);
+});
+
+await test("400s name the bad field, never echo values, and flag unresolved placeholders", async () => {
+    const keys = await newClientKeys();
+    const bad = async overrides => (await startSession(keys, overrides)).body;
+
+    let b = await bad({ appId: "{{upstoxApiKey}}" });
+    assert.equal(b.field, "appId"); assert.match(b.message, /placeholder/);
+    b = await bad({ clientPublicKey: "" });
+    assert.equal(b.field, "clientPublicKey");
+    b = await bad({ clientPublicKey: "{{clientPublicKey}}" });
+    assert.equal(b.field, "clientPublicKey");
+    b = await bad({ clientPublicKey: toBase64Url(new Uint8Array(65).fill(7)) });
+    assert.equal(b.field, "clientPublicKey"); assert.match(b.message, /keygen/);
+    b = await bad({ appSecret: undefined });
+    assert.equal(b.field, "appSecret");
+    b = await bad({ appId: "short" });
+    assert.equal(b.field, "appId");
+    b = await bad({ broker: "nobroker" });
+    assert.equal(b.error, "unsupported_broker"); assert.match(b.message, /upstox/);
+
+    // Non-JSON content type -> explicit hint instead of a mystery 400.
+    const r = await realFetch(base + "/api/v2/auth/sessions", { method: "POST", headers: { Authorization: `Bearer ${API_KEY}`, "Content-Type": "text/plain" }, body: "hello" });
+    assert.equal(r.status, 400); assert.match((await r.json()).message, /application\/json/);
+
+    // Surrounding whitespace in the public key (common copy/paste slip) is tolerated.
+    const ok = await startSession(keys, { clientPublicKey: ` ${keys.pub}\n` });
+    assert.equal(ok.r.status, 201);
+
+    // No submitted secret ever appears in an error body.
+    assert.equal(JSON.stringify(await bad({ appId: "x", appSecret: APP_SECRET })).includes(APP_SECRET), false);
+});
+
+await test("tools/lib.mjs (used by keygen/decrypt + Postman guide) interoperates with the server", async () => {
+    const { generateClientKeys, decryptEnvelope } = await import("../tools/lib.mjs");
+    const { publicKey, privateJwk } = await generateClientKeys();
+    const { r, body } = await startSession({ pub: publicKey });
+    assert.equal(r.status, 201);
+    assert.equal(outcome(await callback(stateOf(body.authorizationUrl))), "received");
+    const done = await (await call(`/api/v2/auth/sessions/${body.sessionId}/result`)).json();
+    const token = await decryptEnvelope({ privateJwk, envelope: done.encrypted, sessionId: body.sessionId });
+    assert.equal(token.accessToken, ACCESS_TOKEN);
+    await assert.rejects(decryptEnvelope({ privateJwk, envelope: done.encrypted, sessionId: "another-session" }));
 });
 
 await test("expired session: callback says expired, poll says expired, cron wipes ciphertext", async () => {

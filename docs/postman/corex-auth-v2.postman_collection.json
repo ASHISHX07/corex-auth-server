@@ -1,0 +1,162 @@
+{
+  "info": {
+    "name": "CoreX Auth Server v2",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Import with the matching environment. Run keygen first, paste clientPublicKey into the environment, then run the requests in order."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{corexClientApiKey}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "0. Health (public)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        },
+        "description": "No auth needed. Confirms the Worker is up.",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('healthy', () => pm.expect(pm.response.json().healthy).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Create session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v2/auth/sessions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v2",
+            "auth",
+            "sessions"
+          ]
+        },
+        "description": "Starts a login. Needs tools/keygen.mjs output in clientPublicKey.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"broker\": \"upstox\",\n  \"appId\": \"{{upstoxApiKey}}\",\n  \"appSecret\": \"{{upstoxApiSecret}}\",\n  \"clientPublicKey\": \"{{clientPublicKey}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  pm.environment.set(\"sessionId\", body.sessionId);",
+              "  pm.environment.set(\"authorizationUrl\", body.authorizationUrl);",
+              "  console.log(\"OPEN THIS URL IN YOUR BROWSER (valid 5 min):\\n\" + body.authorizationUrl);",
+              "  console.log(\"sessionId saved: \" + body.sessionId);",
+              "} else {",
+              "  console.log(\"Create failed: \" + pm.response.code + \" \" + pm.response.text());",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Poll result",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v2/auth/sessions/{{sessionId}}/result",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v2",
+            "auth",
+            "sessions",
+            "{{sessionId}}",
+            "result"
+          ]
+        },
+        "description": "Send after logging in at Upstox. 200 can be fetched ONCE."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const code = pm.response.code;",
+              "if (code === 200) {",
+              "  // One-time result: keep a copy in the environment in case the response is lost.",
+              "  pm.environment.set(\"encryptedResult\", pm.response.text());",
+              "  console.log(\"SUCCESS. Copy the response body NOW, then run: Get-Clipboard | node tools/decrypt.mjs \" + pm.environment.get(\"sessionId\"));",
+              "} else if (code === 202) {",
+              "  console.log(\"Still pending: finish the Upstox login in the browser, then send again.\");",
+              "} else {",
+              "  console.log(\"Not completed: \" + code + \" \" + pm.response.text());",
+              "}",
+              "pm.test(\"200 completed, or 202 pending\", () => pm.expect([200, 202]).to.include(code));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

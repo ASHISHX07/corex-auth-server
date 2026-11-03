@@ -575,7 +575,7 @@
                             <span class="summary-bullet green-dot"></span>
                             <div>
                                 <strong data-session-stat="retrieved">0</strong>
-                                <span>Retrieved</span>
+                                <span>Delivered</span>
                             </div>
                         </div>
 
@@ -602,13 +602,14 @@
                                 <tr>
                                     <th>SESSION ID</th>
                                     <th>BROKER</th>
+                                    <th>API</th>
                                     <th>CREATED</th>
                                     <th>EXPIRES IN</th>
                                     <th>STATUS</th>
                                 </tr>
                             </thead>
                             <tbody id="sessions-body">
-                                <tr><td colspan="5" class="loading-cell">Loading preview…</td></tr>
+                                <tr><td colspan="6" class="loading-cell">Loading preview…</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -783,6 +784,14 @@
                     
                         <div class="limit-item">
                             <div>
+                                <strong>Result polling (v2)</strong>
+                                <span>Per CoreX client</span>
+                            </div>
+                            <div class="limit-value">120 <span>/ min</span></div>
+                        </div>
+
+                        <div class="limit-item">
+                            <div>
                                 <strong>OAuth callback</strong>
                                 <span>Per source IP bucket</span>
                             </div>
@@ -832,8 +841,28 @@
                             <tbody>
                                 <tr>
                                     <td><span class="method method-post">POST</span></td>
+                                    <td class="endpoint-path">/api/v2/auth/sessions</td>
+                                    <td>Start a login (server-side token exchange)</td>
+                                    <td><span class="auth-label">Bearer client key</span></td>
+                                    <td><button class="copy-button" type="button"
+                                        data-copy="/api/v2/auth/sessions" aria-label="Copy endpoint">
+                                        <svg class="icon"><use href="#i-copy"/></svg>
+                                    </button></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="method method-get">GET</span></td>
+                                    <td class="endpoint-path">/api/v2/auth/sessions/:sessionId/result</td>
+                                    <td>Fetch the encrypted token (one time)</td>
+                                    <td><span class="auth-label">Bearer client key</span></td>
+                                    <td><button class="copy-button" type="button"
+                                        data-copy="/api/v2/auth/sessions/:sessionId/result" aria-label="Copy endpoint">
+                                        <svg class="icon"><use href="#i-copy"/></svg>
+                                    </button></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="method method-post">POST</span></td>
                                     <td class="endpoint-path">/api/v1/auth/sessions</td>
-                                    <td>Create an OAuth session</td>
+                                    <td>Create an OAuth session (v1, deprecated)</td>
                                     <td><span class="auth-label">Bearer client key</span></td>
                                     <td><button class="copy-button" type="button"
                                         data-copy="/api/v1/auth/sessions" aria-label="Copy session endpoint">
@@ -843,7 +872,7 @@
                                 <tr>
                                     <td><span class="method method-get">GET</span></td>
                                     <td class="endpoint-path">/api/v1/auth/sessions/:sessionId/result</td>
-                                    <td>Poll and retrieve the result</td>
+                                    <td>Poll and retrieve the code (v1, deprecated)</td>
                                     <td><span class="auth-label">Bearer retrieval secret</span></td>
                                     <td><button class="copy-button" type="button"
                                         data-copy="/api/v1/auth/sessions/:sessionId/result" aria-label="Copy result endpoint">
@@ -852,8 +881,8 @@
                                 </tr>
                                 <tr>
                                     <td><span class="method method-get">GET</span></td>
-                                    <td class="endpoint-path">/auth/upstox/callback</td>
-                                    <td>Receive provider callback</td>
+                                    <td class="endpoint-path">/auth/:broker/callback</td>
+                                    <td>Receive broker redirect (e.g. /auth/upstox/callback)</td>
                                     <td><span class="auth-label">OAuth state</span></td>
                                     <td><button class="copy-button" type="button"
                                         data-copy="/auth/upstox/callback" aria-label="Copy callback endpoint">

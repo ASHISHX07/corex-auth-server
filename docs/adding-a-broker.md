@@ -10,7 +10,7 @@ A new broker is **one file plus one line**:
    {
      name: "zerodha",                    // lower-case id; also the URL segment
      callbackPath: "/auth/zerodha/callback",
-     validateCredentials({ appId, appSecret }) -> boolean,
+     validateCredentials({ appId, appSecret }) -> null | "appId" | "appSecret"  // name of the bad field, never its value
      buildAuthorizationUrl({ appId, state })   -> string,
      async exchangeCode({ code, appId, appSecret })
          -> { accessToken, tokenType, expiresAt /* ISO string */, profile /* whitelisted */ }

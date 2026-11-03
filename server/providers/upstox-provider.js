@@ -17,7 +17,7 @@ function nextTokenExpiry(now = new Date()) {
 /**
  * Provider contract (every broker implements this shape):
  *   name, callbackPath
- *   validateCredentials({ appId, appSecret }) -> boolean
+ *   validateCredentials({ appId, appSecret }) -> null | "appId" | "appSecret"
  *   buildAuthorizationUrl({ appId, state })   -> string
  *   exchangeCode({ code, appId, appSecret })  -> { accessToken, tokenType, expiresAt, profile }
  *       throws ProviderError(code) on any failure
@@ -39,11 +39,11 @@ export function createUpstoxProvider(env) {
         name: "upstox",
         callbackPath: CALLBACK_PATH,
 
+        // Returns null when valid, otherwise the NAME of the offending field (never its value).
         validateCredentials({ appId, appSecret }) {
-            return (
-                typeof appId === "string" && /^[\w-]{8,128}$/.test(appId) &&
-                typeof appSecret === "string" && appSecret.length >= 4 && appSecret.length <= 256
-            );
+            if (typeof appId !== "string" || !/^[\w-]{8,128}$/.test(appId)) return "appId";
+            if (typeof appSecret !== "string" || appSecret.length < 4 || appSecret.length > 256) return "appSecret";
+            return null;
         },
 
         buildAuthorizationUrl({ appId, state }) {
