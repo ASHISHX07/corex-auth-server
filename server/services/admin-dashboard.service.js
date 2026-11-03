@@ -424,8 +424,10 @@ export async function getAdminSessions(
             s.callback_received_at,
             s.code_retrieved_at,
             s.failure_code,
-            CASE WHEN s.authorization_code IS NULL AND s.result_ciphertext IS NULL
-                THEN 0 ELSE 1 END AS has_authorization_code
+            CASE WHEN s.authorization_code IS NOT NULL
+                THEN 1 ELSE 0 END AS has_authorization_code,
+            CASE WHEN s.result_ciphertext IS NOT NULL
+                THEN 1 ELSE 0 END AS has_result
         FROM auth_sessions AS s
         LEFT JOIN corex_clients AS c
             ON c.corex_client_id = s.corex_client_id
@@ -455,8 +457,10 @@ export async function getAdminSessionDetails(env, sessionId) {
             s.callback_received_at,
             s.code_retrieved_at,
             s.failure_code,
-            CASE WHEN s.authorization_code IS NULL AND s.result_ciphertext IS NULL
-                THEN 0 ELSE 1 END AS has_authorization_code
+            CASE WHEN s.authorization_code IS NOT NULL
+                THEN 1 ELSE 0 END AS has_authorization_code,
+            CASE WHEN s.result_ciphertext IS NOT NULL
+                THEN 1 ELSE 0 END AS has_result
         FROM auth_sessions AS s
         LEFT JOIN corex_clients AS c
             ON c.corex_client_id = s.corex_client_id

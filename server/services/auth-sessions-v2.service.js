@@ -87,11 +87,18 @@ export async function completeAuthSessionV2(env, provider, { state, code, error 
     const claim = await env.DB.prepare(`
         UPDATE auth_sessions
         SET status = 'code_received', callback_received_at = ?
-        WHERE session_id = ? AND api_version = 2 AND status = 'pending' AND expires_at > ?
-          AND EXISTS (
-              SELECT 1 FROM corex_clients c
-              WHERE c.corex_client_id = auth_sessions.corex_client_id AND c.status = 'active'
-          )
+        WHERE session_id = ?
+        WHERE session_id = ?
+            AND api_version = 2
+            AND status = 'pending'
+            AND expires_at > ?
+            AND corex_client_id = ?
+            AND broker = ?
+            AND provider_app_id = ?
+            AND EXISTS (
+                SELECT 1 FROM corex_clients c
+                WHERE c.corex_client_id = auth_sessions.corex_client_id AND c.status = 'active'
+            )
     `).bind(now, claims.sid, now).run();
 
     if (!claim.success || claim.meta.changes !== 1) return "invalid";

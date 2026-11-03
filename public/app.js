@@ -13,7 +13,8 @@ const state = {
     clients: [],
     requestCursor: null,
     requestHasMore: false,
-    requestLoadingMore: false
+    requestLoadingMore: false,
+    requestLoadVersion: 0
 };
 
 const brokerNames = {
@@ -220,31 +221,57 @@ function setDashboardNotice(title, message, mode = "live") {
 /* ---------- Authenticated API access ---------- */
 
 async function fetchAdminJson(url, options = {}) {
-    const response = await fetch(url, {
-        credentials: "same-origin",
-        cache: "no-store",
-        ...options
-    });
+    const controller = new AbortController();
 
-    if (response.status === 401) {
-        window.location.replace("/login.html");
+    // Give each dashboard API request a maximum of 15 seconds.
+    const timeoutId = window.setTimeout(
+        () => controller.abort(),
+        15_000
+    );
 
-        const error = new Error("Authentication required");
-        error.unauthorized = true;
+    try {
+        const response = await fetch(url, {
+            ...options,
+            credentials: "same-origin",
+            cache: "no-store",
+            signal: controller.signal
+        });
+
+        if (response.status === 401) {
+            window.location.replace("/login.html");
+
+            const error = new Error("Authentication required");
+            error.unauthorized = true;
+
+            throw error;
+        }
+
+        if (!response.ok) {
+            const error = new Error(
+                `Admin API request failed (${response.status})`
+            );
+
+            error.status = response.status;
+            throw error;
+        }
+
+        return await response.json();
+
+    } catch (error) {
+        if (controller.signal.aborted) {
+            const timeoutError = new Error(
+                "Admin API request timed out after 15 seconds"
+            );
+
+            timeoutError.name = "TimeoutError";
+            throw timeoutError;
+        }
 
         throw error;
+
+    } finally {
+        window.clearTimeout(timeoutId);
     }
-
-    if (!response.ok) {
-        const error = new Error(
-            `Admin API request failed (${response.status})`
-        );
-
-        error.status = response.status;
-        throw error;
-    }
-
-    return response.json();
 }
 
 async function loadAdminIdentity() {
@@ -530,6 +557,7 @@ function renderRequests() {
 
 /* ---------- OAuth session rendering ---------- */
 
+
 function sessionView(session) {
     const now = Math.floor(Date.now() / 1000);
     const isV2 = Number(session.api_version) === 2;
@@ -540,7 +568,7 @@ function sessionView(session) {
 
     if (status === "retrieved") {
         status = "completed";
-        label = isV2 ? "Token delivered" : "Retrieved";
+        label = isV2 ? "Encrypted result fetched" : "Retrieved";
         css = "completed";
     } else if (status === "pending" || status === "code_received") {
         if (Number(session.expires_at) <= now) {
@@ -550,15 +578,19 @@ function sessionView(session) {
         } else {
             css = "pending";
 
-            if (status === "pending") {
-                label = "Waiting for login";
-            } else if (isV2) {
-                // v2: callback arrived; token is either being exchanged or ready to fetch.
-                label = Number(session.has_authorization_code)
-                    ? "Token ready"
-                    : "Exchanging";
+            if (isV2) {
+                if (status === "pending") {
+                    label = "Awaiting broker";
+                } else if (Number(session.has_result)) {
+                    label = "Token ready";
+                } else {
+                    label = "Processing token";
+                }
             } else {
-                label = "Code received";
+                // Preserve the original v1 status labels.
+                label = status === "pending"
+                    ? "Waiting for login"
+                    : "Code received";
             }
         }
     } else if (status === "expired") {
@@ -566,7 +598,7 @@ function sessionView(session) {
         label = "Expired";
     } else if (status === "failed") {
         css = "error";
-        // failure_code is a fixed, non-sensitive reason (e.g. exchange_rejected).
+        // failure_code is a fixed, non-sensitive reason.
         label = session.failure_code
             ? `Failed · ${session.failure_code}`
             : "Failed";
@@ -593,6 +625,7 @@ function sessionView(session) {
 
     return { status, label, css, expires };
 }
+
 
 function renderSessions() {
     const body = $("#sessions-body");
@@ -1049,6 +1082,7 @@ function updateOverview(overview) {
 
 /* ---------- Load all live dashboard panels ---------- */
 
+
 async function loadDashboardData() {
     const period = $("#period-select")?.value || "24h";
     const refreshButton = $("#refresh-button");
@@ -1070,7 +1104,7 @@ async function loadDashboardData() {
     setText("#request-count", "Loading request records…");
     updateLoadMoreButton();
 
-    if (refreshButton) refreshButton.disabled = true;
+    // if (refreshButton) refreshButton.disabled = false;
 
     setDashboardNotice(
         "Loading live data",
@@ -1088,125 +1122,159 @@ async function loadDashboardData() {
         ["clients", "/api/v1/admin/clients?limit=100"]
     ];
 
-    const results = await Promise.allSettled(
-        jobs.map(async ([key, url]) => ({
-            key,
-            data: await fetchAdminJson(url)
-        }))
-    );
+    try {
+        // 1. Execute all four dashboard requests independently.
+        const results = await Promise.allSettled(
+            jobs.map(async ([key, url]) => ({
+                key,
+                data: await fetchAdminJson(url)
+            }))
+        );
 
-    if (requestVersion !== state.requestLoadVersion) return;
+        // 2. Ignore results from an older dashboard refresh.
+        if (requestVersion !== state.requestLoadVersion) {
+            return;
+        }
 
-    if (
-        results.some(
-            result =>
-                result.status === "rejected" &&
-                result.reason?.unauthorized
-        )
-    ) {
-        if (refreshButton) refreshButton.disabled = false;
-        return;
-    }
+        // 3. Authentication failure already triggers a login redirect.
+        if (
+            results.some(
+                result =>
+                    result.status === "rejected" &&
+                    result.reason?.unauthorized
+            )
+        ) {
+            return;
+        }
 
-    const failures = [];
+        const failures = [];
 
-    for (let index = 0; index < results.length; index++) {
-        const result = results[index];
-        const key = jobs[index][0];
+        // 4. Process each panel independently.
+        for (let index = 0; index < results.length; index++) {
+            const result = results[index];
+            const key = jobs[index][0];
 
-        if (result.status === "rejected") {
-            failures.push(key);
+            if (result.status === "rejected") {
+                failures.push(key);
 
-            if (key === "overview" && !state.overview) {
-                setDashboardNotice(
-                    "Overview unavailable",
-                    "Metrics couldn't be loaded. Check the Worker logs.",
-                    "error"
-                );
-            } else if (key === "requests" && !state.requests.length) {
-                renderTableMessage(
-                    "#requests-body",
-                    8,
-                    "Request logs couldn't be loaded."
-                );
+                if (key === "overview" && !state.overview) {
+                    setDashboardNotice(
+                        "Overview unavailable",
+                        "Metrics couldn't be loaded. Check the Worker logs.",
+                        "error"
+                    );
 
-                setText(
-                    "#request-count",
-                    "Request records unavailable"
-                );
+                } else if (key === "requests" && !state.requests.length) {
+                    renderTableMessage(
+                        "#requests-body",
+                        8,
+                        "Request logs couldn't be loaded."
+                    );
 
-                updateLoadMoreButton();
-            } else if (key === "sessions" && !state.sessions.length) {
-                renderTableMessage(
-                    "#sessions-body",
-                    5,
-                    "Sessions couldn't be loaded."
-                );
-            } else if (key === "clients" && !state.clients.length) {
-                renderTableMessage(
-                    "#clients-body",
-                    7,
-                    "Clients couldn't be loaded."
-                );
+                    setText(
+                        "#request-count",
+                        "Request records unavailable"
+                    );
+
+                    updateLoadMoreButton();
+
+                } else if (key === "sessions" && !state.sessions.length) {
+                    renderTableMessage(
+                        "#sessions-body",
+                        5,
+                        "Sessions couldn't be loaded."
+                    );
+
+                } else if (key === "clients" && !state.clients.length) {
+                    renderTableMessage(
+                        "#clients-body",
+                        7,
+                        "Clients couldn't be loaded."
+                    );
+                }
+
+                continue;
             }
 
-            continue;
+            const data = result.value.data;
+
+            if (key === "overview") {
+                updateOverview(data);
+
+            } else if (key === "requests") {
+                state.requests = Array.isArray(data.items)
+                    ? data.items
+                    : [];
+
+                state.requestCursor =
+                    typeof data.nextCursor === "string" && data.nextCursor
+                        ? data.nextCursor
+                        : null;
+
+                state.requestHasMore = Boolean(state.requestCursor);
+                state.requestLoadingMore = false;
+
+                renderRequests();
+                updateUsage();
+                updateLoadMoreButton();
+
+            } else if (key === "sessions") {
+                state.sessions = Array.isArray(data.items)
+                    ? data.items
+                    : [];
+
+                renderSessions();
+
+            } else if (key === "clients") {
+                state.clients = Array.isArray(data.items)
+                    ? data.items
+                    : [];
+
+                renderClients();
+            }
         }
 
-        const data = result.value.data;
-
-        if (key === "overview") {
-            updateOverview(data);
-
-        } else if (key === "requests") {
-            state.requests = Array.isArray(data.items)
-                ? data.items
-                : [];
-
-            state.requestCursor =
-                typeof data.nextCursor === "string" && data.nextCursor
-                    ? data.nextCursor
-                    : null;
-
-            state.requestHasMore = Boolean(state.requestCursor);
-            state.requestLoadingMore = false;
-
-            renderRequests();
-            updateUsage();
-            updateLoadMoreButton();
-
-        } else if (key === "sessions") {
-            state.sessions = Array.isArray(data.items)
-                ? data.items
-                : [];
-
-            renderSessions();
-
-        } else if (key === "clients") {
-            state.clients = Array.isArray(data.items)
-                ? data.items
-                : [];
-
-            renderClients();
+        // 5. Report the final dashboard state.
+        if (failures.length === 0) {
+            setDashboardNotice(
+                "Live data connected",
+                `Updated ${new Date().toLocaleTimeString()}. ` +
+                "Metrics and records loaded from the authenticated Admin API.",
+                "live"
+            );
+        } else {
+            setDashboardNotice(
+                "Some data could not be loaded",
+                `Failed panels: ${failures.join(", ")}. ` +
+                "Check Worker logs if this continues.",
+                "partial"
+            );
         }
-    }
 
-    if (refreshButton) refreshButton.disabled = false;
+    } catch (error) {
+        // Unexpected JavaScript or rendering error.
+        if (requestVersion !== state.requestLoadVersion) {
+            return;
+        }
 
-    if (failures.length === 0) {
+        console.error("Dashboard loading failed:", {
+            name: error?.name ?? "UnknownError"
+        });
+
         setDashboardNotice(
-            "Live data connected",
-            `Updated ${new Date().toLocaleTimeString()}. ` +
-            "Metrics and records loaded from the authenticated Admin API.",
-            "live"
+            "Dashboard unavailable",
+            "An unexpected error occurred while loading dashboard data. Please refresh.",
+            "error"
         );
-    } else {
-        setDashboardNotice(
-            "Some data could not be loaded",
-            `Failed panels: ${failures.join(", ")}. ` +
-            "Check Worker logs if this continues.",
-            "partial"
-        );
+
+    } finally {
+        // Always release the refresh button, but only for the latest refresh.
+        if (
+            requestVersion === state.requestLoadVersion &&
+            refreshButton
+        ) {
+            refreshButton.disabled = false;
+        }
     }
 }
 
