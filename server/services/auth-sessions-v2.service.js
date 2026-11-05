@@ -2,7 +2,7 @@ import { getProvider } from "../providers/provider-registry.js";
 import { ProviderError } from "../providers/provider-error.js";
 import {
     sealState, openState, encryptForClient, importClientPublicKey
-} from "../security/crypto.js";
+} from "../security/legacy-v2.js";
 
 const SESSION_TTL_SECONDS = 300;
 const RETRIEVAL_GRACE_SECONDS = 60;

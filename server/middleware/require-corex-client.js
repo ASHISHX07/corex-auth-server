@@ -1,4 +1,4 @@
-import { sha256Hex } from "../security/crypto.js";
+import { sha256Hex } from "../security/hashing.js";
 
 const LAST_SEEN_INTERVAL_SECONDS = 300;
 

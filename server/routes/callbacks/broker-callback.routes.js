@@ -2,7 +2,7 @@ import { Router } from "express";
 import { receiveAuthCode, failAuthSession } from "../../services/auth-sessions.service.js";
 import { completeAuthSessionV2 } from "../../services/auth-sessions-v2.service.js";
 import { getProvider } from "../../providers/provider-registry.js";
-import { isSealedState } from "../../security/crypto.js";
+import { isSealedState } from "../../security/legacy-v2.js";
 import { limitCallbacks } from "../../middleware/rate-limits.js";
 
 const ALLOWED_STATUSES = new Set(["received", "failed", "invalid", "unavailable", "expired"]);

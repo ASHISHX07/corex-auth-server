@@ -1,5 +1,5 @@
 import { getProvider } from "../providers/provider-registry.js";
-import { sha256Hex } from "../security/crypto.js";
+import { sha256Hex } from "../security/hashing.js";
 
 function randomBase64Url(byteLength = 32) {
     const bytes = crypto.getRandomValues(new Uint8Array(byteLength));

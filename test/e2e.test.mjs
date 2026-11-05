@@ -3,7 +3,24 @@ import { fileURLToPath } from "node:url";
 import { webcrypto as crypto } from "node:crypto";
 import { createD1 } from "./d1-shim.mjs";
 import { createApp } from "../server/app.js";
-import { sha256Hex, toBase64Url, fromBase64Url, sealState } from "../server/security/crypto.js";
+import { sha256Hex } from "../server/security/hashing.js";
+
+import {
+    toBase64Url,
+    fromBase64Url
+} from "../server/security/encoding.js";
+
+import {
+    sealState
+} from "../server/security/legacy-v2.js";
+
+import {
+    sealOAuthState,
+    openOAuthState,
+    sealTokenResult,
+    openTokenResult
+} from "../server/security/seal.js";
+
 import { runMaintenance } from "../server/services/maintenance.service.js";
 
 const APP_ID = "UPSTOX-API-KEY-123";
@@ -15,6 +32,7 @@ const db = createD1(fileURLToPath(new URL("../db/migrations", import.meta.url)))
 const limiter = { limit: async () => ({ success: true }) };
 const env = {
     DB: db, UPSTOX_REDIRECT_URI: REDIRECT,
+    COREX_MASTER_KEY: toBase64Url(crypto.getRandomValues(new Uint8Array(32))),
     COREX_STATE_KEY: toBase64Url(crypto.getRandomValues(new Uint8Array(32))),
     AUTH_SESSION_LIMITER: limiter, AUTH_POLL_LIMITER: limiter, CALLBACK_LIMITER: limiter
 };
@@ -255,6 +273,114 @@ await test("v1 flow still works unchanged (backward compatible)", async () => {
 await test("migration preserved columns/constraints; new broker needs no migration", async () => {
     db.raw.prepare("INSERT INTO auth_sessions (session_id, broker, provider_app_id, api_version, status, created_at, expires_at) VALUES ('x','zerodha','a',2,'pending',1,2)").run();
     assert.throws(() => db.raw.prepare("INSERT INTO auth_sessions (session_id, broker, provider_app_id, status, created_at, expires_at) VALUES ('y','z','a','pending',1,2)").run());
+});
+
+await test("v3 OAuth state is sealed and tampering is rejected", async () => {
+    const claims = {
+        sessionId: "v3-test-session",
+        clientId: "client-1",
+        broker: "upstox",
+        expiresAt: Math.floor(Date.now() / 1000) + 300,
+        credentials: {
+            appId: APP_ID,
+            appSecret: APP_SECRET
+        }
+    };
+
+    const state = await sealOAuthState(env, claims);
+
+    assert.ok(state.startsWith("v3."));
+    assert.equal(state.includes(APP_SECRET), false);
+
+    assert.deepEqual(
+        await openOAuthState(env, state),
+        claims
+    );
+
+    const tampered = state.slice(0, -1) +
+        (state.endsWith("A") ? "B" : "A");
+
+    assert.equal(
+        await openOAuthState(env, tampered),
+        null
+    );
+
+    assert.equal(
+        await openOAuthState(env, "v3.garbage"),
+        null
+    );
+});
+
+await test("v3 token ciphertext is bound to session and broker", async () => {
+    const sessionId = "v3-token-test-session";
+    const broker = "upstox";
+
+    const result = {
+        token: {
+            accessToken: ACCESS_TOKEN,
+            tokenType: "Bearer"
+        },
+        profile: {
+            userId: "U123"
+        }
+    };
+
+    const ciphertext = await sealTokenResult(env, {
+        sessionId,
+        broker,
+        result
+    });
+
+    assert.equal(ciphertext.includes(ACCESS_TOKEN), false);
+
+    assert.deepEqual(
+        await openTokenResult(env, {
+            sessionId,
+            broker,
+            ciphertext
+        }),
+        result
+    );
+
+    await assert.rejects(
+        openTokenResult(env, {
+            sessionId: "different-session",
+            broker,
+            ciphertext
+        })
+    );
+
+    await assert.rejects(
+        openTokenResult(env, {
+            sessionId,
+            broker: "zerodha",
+            ciphertext
+        })
+    );
+});
+
+await test("v3 key derivation rejects missing or invalid master keys", async () => {
+    const { derivePurposeKey } = await import(
+        "../server/security/keys.js"
+    );
+
+    await assert.rejects(
+        derivePurposeKey({}, "state"),
+        /COREX_MASTER_KEY/
+    );
+
+    await assert.rejects(
+        derivePurposeKey(
+            { COREX_MASTER_KEY: "invalid" },
+            "state"
+        ),
+        /COREX_MASTER_KEY/
+    );
+
+    await assert.rejects(
+        derivePurposeKey(env, "unknown"),
+        /purpose/
+    );
 });
 
 server.close();
