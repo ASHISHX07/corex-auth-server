@@ -20,12 +20,13 @@ import {
     getAdminRequests,
     getAdminClients,
     getAdminClientDetails,
+    getAdminAudit,
     getAdminSessions,
     getAdminSessionDetails,
     invalidateAdminSession
 } from "../services/admin-dashboard.service.js";
 
-import { revokeCorexClient } from "../services/client-admin.service.js";
+import { revokeCorexClient, updateCorexClientScopes } from "../services/client-admin.service.js";
 
 import { verifyAdminCredentials } from "../security/admin-credentials.js";
 
@@ -152,6 +153,18 @@ export default function createAdminRouter(env) {
      */
     router.use(requireAdmin(env));
 
+    router.get("/audit", async (req, res) => {
+        try {
+            const items = await getAdminAudit(env, {
+                limit: req.query.limit
+            });
+
+            return res.json({ items });
+        } catch {
+            return sendInternalError(res, "Admin audit query failed");
+        }
+    });
+
     router.get("/me", (req, res) => {
         res.set("Cache-Control", "no-store");
 
@@ -235,6 +248,52 @@ export default function createAdminRouter(env) {
         }
     });
 
+    router.patch(
+        "/clients/:clientId/scopes",
+        requireSameOriginForCookieAdmin,
+        async (req, res) => {
+            const clientId = req.params.clientId;
+            const { scopes } = req.body ?? {};
+
+            if (!validId(clientId)) {
+                return res.status(400).json({
+                    error: "invalid_client_id"
+                });
+            }
+
+            if (
+                !Array.isArray(scopes) ||
+                scopes.some(scope => scope !== "auth")
+            ) {
+                return res.status(400).json({
+                    error: "invalid_scopes"
+                });
+            }
+
+            try {
+                const result = await updateCorexClientScopes(
+                    env,
+                    clientId,
+                    scopes,
+                    req.adminUser
+                );
+
+                if (!result) {
+                    return res.status(404).json({
+                        error: "client_not_found"
+                    });
+                }
+
+                return res.json(result);
+            } catch {
+                return sendInternalError(
+                    res,
+                    "Client scope update failed"
+                );
+            }
+        }
+    );
+
     router.post(
         "/clients/:clientId/revoke",
         requireSameOriginForCookieAdmin,
@@ -248,7 +307,11 @@ export default function createAdminRouter(env) {
             }
 
             try {
-                const result = await revokeCorexClient(env, clientId);
+                const result = await revokeCorexClient(
+                    env,
+                    clientId,
+                    req.adminUser
+                );
 
                 if (!result) {
                     return res.status(404).json({
@@ -328,7 +391,8 @@ export default function createAdminRouter(env) {
             try {
                 const result = await invalidateAdminSession(
                     env,
-                    sessionId
+                    sessionId,
+                    req.adminUser
                 );
 
                 if (result.outcome === "not_found") {
