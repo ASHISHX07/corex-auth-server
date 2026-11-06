@@ -6,7 +6,8 @@ import { ProviderError } from "../../brokers/provider-error.js";
 import {
     openOAuthState,
     sealOAuthState,
-    sealTokenResult
+    sealTokenResult,
+    openTokenResult
 } from "../../security/seal.js";
 
 const SESSION_TTL_SECONDS = 300;
@@ -618,7 +619,7 @@ export async function completeAuthCallback(env, {
             SET
                 status = 'ready',
                 result_ciphertext = ?,
-                expires_at = MAX(expires_at, ?)
+                expires_at = MAX(expires_at, ?) + 60
             WHERE session_id = ?
               AND corex_client_id = ?
               AND broker = ?
@@ -635,7 +636,7 @@ export async function completeAuthCallback(env, {
               )
         `).bind(
             ciphertext,
-            readyAt + 60,
+            readyAt,
             ...bindings,
             claims.clientId
         ).run();
@@ -669,4 +670,222 @@ export async function completeAuthCallback(env, {
 
         return "unavailable";
     }
+}
+
+const RESULT_FAILURES = Object.freeze({
+    authorization_denied: [ "authorization_denied", 409 ],
+    exchange_rejected: [ "exchange_rejected", 409 ],
+    provider_unreachable: [ "provider_unreachable", 409 ],
+    provider_unavailable: [ "provider_unavailable", 409 ],
+    provider_bad_response: [ "provider_bad_response", 409 ],
+    authentication_unavailable: [ "service_unavailable", 503 ]
+});
+
+function getFailureResult(code) {
+    const [error, httpStatus] =
+        RESULT_FAILURES[code] ?? [
+            "authentication_failed",
+            409
+        ];
+
+    return failure(error, httpStatus);
+}
+
+async function expireSession(env, sessionId, clientId, now) {
+    await env.DB.prepare(`
+        UPDATE auth_sessions
+        SET
+            status = 'expired',
+            result_ciphertext = NULL,
+            failure_code = 'session_expired'
+        WHERE session_id = ?
+          AND corex_client_id = ?
+          AND api_version = 3
+          AND status IN ('pending', 'ready')
+          AND expires_at <= ?
+    `).bind(sessionId, clientId, now).run();
+}
+
+export async function getAuthSessionResult(
+    env,
+    { sessionId, clientId }
+) {
+    if (!env?.DB) {
+        throw new Error("Database binding is missing.");
+    }
+
+    if (
+        typeof sessionId !== "string" ||
+        sessionId.length === 0 ||
+        sessionId.length > 64
+    ) {
+        return failure("session_not_found", 404);
+    }
+
+    // Always restrict lookup to the owning, active client.
+    const findSession = () => env.DB.prepare(`
+        SELECT
+            s.broker,
+            s.status,
+            s.expires_at,
+            s.failure_code,
+            s.result_ciphertext
+        FROM auth_sessions s
+        WHERE s.session_id = ?
+          AND s.corex_client_id = ?
+          AND s.api_version = 3
+          AND EXISTS (
+              SELECT 1
+              FROM corex_clients c
+              WHERE c.corex_client_id = s.corex_client_id
+                AND c.status = 'active'
+          )
+    `).bind(sessionId, clientId).first();
+
+    let session = await findSession();
+
+    if (!session) {
+        return failure("session_not_found", 404);
+    }
+
+    let now = Math.floor(Date.now() / 1000);
+
+    if (
+        ["pending", "ready"].includes(session.status) &&
+        session.expires_at <= now
+    ) {
+        await expireSession(env, sessionId, clientId, now);
+        return failure("expired", 410);
+    }
+
+    switch (session.status) {
+        case "pending":
+        case "processing":
+            return { status: "pending" };
+
+        case "failed":
+            return getFailureResult(session.failure_code);
+
+        case "cancelled":
+            return failure("cancelled", 410);
+
+        case "expired":
+            return failure("expired", 410);
+
+        case "retrieved":
+            return failure("already_retrieved", 410);
+
+        case "ready":
+            break;
+
+        default:
+            throw new Error("Unexpected V3 session status.");
+    }
+
+    if (!session.result_ciphertext) {
+        throw new Error("Ready session has no stored result.");
+    }
+
+    // Decrypt first. If decryption fails, the result remains available
+    // for retry rather than being consumed accidentally.
+    const result = await openTokenResult(env, {
+        sessionId,
+        broker: session.broker,
+        ciphertext: session.result_ciphertext
+    });
+
+    now = Math.floor(Date.now() / 1000);
+
+    // Claim retrieval and delete ciphertext in one D1 transaction.
+    // Only one concurrent request can change ready -> retrieved.
+    const batch = await env.DB.batch([
+        env.DB.prepare(`
+            UPDATE auth_sessions
+            SET
+                status = 'retrieved',
+                retrieved_at = ?
+            WHERE session_id = ?
+              AND corex_client_id = ?
+              AND broker = ?
+              AND api_version = 3
+              AND status = 'ready'
+              AND result_ciphertext = ?
+              AND expires_at > ?
+              AND EXISTS (
+                  SELECT 1
+                  FROM corex_clients
+                  WHERE corex_client_id = ?
+                    AND status = 'active'
+              )
+        `).bind(
+            now,
+            sessionId,
+            clientId,
+            session.broker,
+            session.result_ciphertext,
+            now,
+            clientId
+        ),
+
+        env.DB.prepare(`
+            UPDATE auth_sessions
+            SET result_ciphertext = NULL
+            WHERE session_id = ?
+              AND corex_client_id = ?
+              AND api_version = 3
+              AND status = 'retrieved'
+              AND result_ciphertext IS NOT NULL
+        `).bind(sessionId, clientId)
+    ]);
+
+    if (batch[0]?.meta?.changes !== 1) {
+        // Another request may have retrieved or invalidated it first.
+        session = await findSession();
+
+        if (!session) {
+            return failure("session_not_found", 404);
+        }
+
+        if (session.status === "retrieved") {
+            return failure("already_retrieved", 410);
+        }
+
+        if (session.status === "failed") {
+            return getFailureResult(session.failure_code);
+        }
+
+        if (session.status === "cancelled") {
+            return failure("cancelled", 410);
+        }
+
+        if (session.status === "expired") {
+            return failure("expired", 410);
+        }
+
+        if (
+            ["pending", "processing"].includes(session.status)
+        ) {
+            return { status: "pending" };
+        }
+
+        if (
+            session.status === "ready" &&
+            session.expires_at <= now
+        ) {
+            await expireSession(env, sessionId, clientId, now);
+            return failure("expired", 410);
+        }
+
+        throw new Error("Token retrieval could not be claimed.");
+    }
+
+    if (batch[1]?.meta?.changes !== 1) {
+        throw new Error("Retrieved token ciphertext was not cleared.");
+    }
+
+    return {
+        status: "completed",
+        broker: session.broker,
+        ...result
+    };
 }

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { fileURLToPath } from "node:url";
 import { createApp } from "../server/gateway/app.js";
-import { createD1 } from "./d1.js";
+import { createD1 } from "../test-support/d1.js";
 import { sha256Hex } from "../server/security/hashing.js";
 import { randomBase64Url } from "../server/security/encoding.js";
 import {
@@ -848,6 +848,114 @@ test("broker token rejection marks the session failed safely", async () => {
                 assert.equal(
                     JSON.stringify(row).includes("Invalid secret"),
                     false
+                );
+            });
+        }
+    );
+});
+
+async function retrieveResult(baseUrl, apiKey, sessionId) {
+    return fetch(
+        `${baseUrl}/api/v3/auth/sessions/${sessionId}/result`,
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${apiKey}`
+            }
+        }
+    );
+}
+
+test("CoreX retrieves a completed token exactly once", async () => {
+    const context = await createContext();
+
+    await withMockedUpstox(
+        async () => Response.json({
+            access_token: "ACCESS-TOKEN",
+            user_id: "USER-123"
+        }),
+
+        async () => {
+            await withServer(context, async baseUrl => {
+                const created = await createSession(
+                    baseUrl,
+                    context.apiKey
+                );
+
+                assert.equal(created.status, 201);
+
+                const session = await created.json();
+
+                // Before authorization, the client gets pending.
+                const pending = await retrieveResult(
+                    baseUrl,
+                    context.apiKey,
+                    session.sessionId
+                );
+
+                assert.equal(pending.status, 202);
+                assert.deepEqual(
+                    await pending.json(),
+                    { status: "pending" }
+                );
+
+                // Complete the broker authorization.
+                const state = new URL(session.authorizationUrl)
+                    .searchParams
+                    .get("state");
+
+                const callback = await callBrokerCallback(
+                    baseUrl,
+                    "upstox",
+                    state,
+                    { code: "AUTH-CODE" }
+                );
+
+                assert.equal(
+                    callbackStatus(callback, baseUrl),
+                    "received"
+                );
+
+                // The same client retrieves the token.
+                const response = await retrieveResult(
+                    baseUrl,
+                    context.apiKey,
+                    session.sessionId
+                );
+
+                assert.equal(response.status, 200);
+
+                const body = await response.json();
+
+                assert.equal(body.status, "completed");
+                assert.equal(body.broker, "upstox");
+                assert.equal(body.token.accessToken, "ACCESS-TOKEN");
+                assert.equal(body.token.tokenType, "Bearer");
+                assert.equal(body.profile.userId, "USER-123");
+
+                // The stored token has been consumed.
+                const row = await context.DB.prepare(`
+                    SELECT status, result_ciphertext, retrieved_at
+                    FROM auth_sessions
+                    WHERE session_id = ?
+                `).bind(session.sessionId).first();
+
+                assert.equal(row.status, "retrieved");
+                assert.equal(row.result_ciphertext, null);
+                assert.ok(row.retrieved_at);
+
+                // A second retrieval cannot return the token again.
+                const repeated = await retrieveResult(
+                    baseUrl,
+                    context.apiKey,
+                    session.sessionId
+                );
+
+                assert.equal(repeated.status, 410);
+
+                assert.equal(
+                    (await repeated.json()).error,
+                    "already_retrieved"
                 );
             });
         }
