@@ -10,12 +10,12 @@ const app = createApp(env, waitUntil);
 
 app.listen(PORT);
 
-const fetchHandler = httpServerHandler({
+const httpHandlers = httpServerHandler({
     port: PORT
 });
 
 export default {
-    fetch: fetchHandler,
+    fetch: httpHandlers.fetch,
 
     async scheduled(_controller, scheduledEnv) {
         await runMaintenance(scheduledEnv);
