@@ -25,25 +25,13 @@ async function withMockFetch(mock, callback) {
 }
 
 test("Upstox exchanges the authorization code and normalizes the result", async () => {
+    let request;
+
     await withMockFetch(async (url, options) => {
-        assert.equal(
-            String(url),
-            "https://api.upstox.com/v2/login/authorization/token"
-        );
-
-        assert.equal(options.method, "POST");
-
-        const body = Object.fromEntries(
-            new URLSearchParams(options.body)
-        );
-
-        assert.deepEqual(body, {
-            code: "AUTH-CODE",
-            client_id: credentials.appId,
-            client_secret: credentials.appSecret,
-            redirect_uri: redirectUri,
-            grant_type: "authorization_code"
-        });
+        request = {
+            url: String(url),
+            options
+        };
 
         return Response.json({
             access_token: "ACCESS-TOKEN",
@@ -60,15 +48,29 @@ test("Upstox exchanges the authorization code and normalizes the result", async 
             redirectUri
         });
 
+        // Verify the HTTP request after the provider has completed.
         assert.equal(
-            result.token.accessToken,
-            "ACCESS-TOKEN"
+            request.url,
+            "https://api.upstox.com/v2/login/authorization/token"
         );
 
-        assert.equal(
-            result.token.tokenType,
-            "Bearer"
+        assert.equal(request.options.method, "POST");
+
+        const body = Object.fromEntries(
+            new URLSearchParams(request.options.body)
         );
+
+        assert.deepEqual(body, {
+            code: "AUTH-CODE",
+            client_id: credentials.appId,
+            client_secret: credentials.appSecret,
+            redirect_uri: redirectUri,
+            grant_type: "authorization_code"
+        });
+
+        // Verify the normalized CoreX response.
+        assert.equal(result.token.accessToken, "ACCESS-TOKEN");
+        assert.equal(result.token.tokenType, "Bearer");
 
         assert.ok(
             Date.parse(result.token.tokenExpiresAt) > Date.now()
