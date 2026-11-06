@@ -3,7 +3,7 @@ import {
     createAuthSessionV2,
     getAuthSessionResultV2
 } from "../services/auth-sessions-v2.service.js";
-import { requireCorexClient } from "../middleware/require-admin.js";
+import { requireCorexClient } from "../gateway/client-auth.js";
 import { limitSessionCreation, limitSessionPolling } from "../gateway/rate-limits.js";
 import { BROKER_IDS } from "../brokers/provider-registry.js";
 

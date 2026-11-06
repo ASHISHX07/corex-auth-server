@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { createAuthSession, getAuthSessionResult } from "../services/auth-sessions.service.js";
-import { requireCorexClient } from "../middleware/require-admin.js";
+import { requireCorexClient } from "../gateway/client-auth.js";
 import { limitSessionCreation } from "../gateway/rate-limits.js";
 
 export default function createAuthRouter(env) {
