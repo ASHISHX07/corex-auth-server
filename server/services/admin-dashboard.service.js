@@ -4,9 +4,12 @@ const BROKERS = new Set(BROKER_IDS);
 const SESSION_STATUSES = new Set([
     "pending",
     "code_received",
+    "processing",
+    "ready",
     "retrieved",
     "failed",
-    "expired"
+    "expired",
+    "cancelled"
 ]);
 
 function normalizeLimit(value, fallback = 50) {
@@ -148,9 +151,12 @@ export async function getAdminOverview(env, period = "24h") {
     const sessions = {
         pending: 0,
         code_received: 0,
+        processing: 0,
+        ready: 0,
         retrieved: 0,
         failed: 0,
-        expired: 0
+        expired: 0,
+        cancelled: 0
     };
 
     for (const row of sessionStatsResult.results ?? []) {
@@ -159,10 +165,11 @@ export async function getAdminOverview(env, period = "24h") {
         }
     }
 
-    sessions.active = sessions.pending + sessions.code_received;
-    sessions.total = Object.values(sessions)
-        .filter(value => typeof value === "number")
-        .reduce((sum, value) => sum + value, 0) - sessions.active;
+    sessions.active =
+    sessions.pending +
+    sessions.code_received +
+    sessions.processing +
+    sessions.ready;
 
     // Total sessions are queried separately to avoid derived-count ambiguity.
     const totalSessions = await env.DB.prepare(`
@@ -318,6 +325,9 @@ export async function getAdminClients(
         SELECT
             c.corex_client_id,
             c.display_name,
+            c.key_hint,
+            c.scopes,
+            c.created_by,
             c.status,
             c.created_at,
             c.last_seen_at,
@@ -330,7 +340,12 @@ export async function getAdminClients(
                 SELECT COUNT(*)
                 FROM auth_sessions AS s
                 WHERE s.corex_client_id = c.corex_client_id
-                  AND s.status IN ('pending', 'code_received')
+                AND s.status IN (
+                    'pending',
+                    'code_received',
+                    'processing',
+                    'ready'
+                )
                   AND s.expires_at > ?
             ) AS open_sessions
         FROM corex_clients AS c
@@ -352,6 +367,9 @@ export async function getAdminClientDetails(env, clientId) {
         SELECT
             corex_client_id,
             display_name,
+            key_hint,
+            scopes,
+            created_by,
             status,
             created_at,
             last_seen_at
@@ -372,6 +390,27 @@ export async function getAdminClientDetails(env, clientId) {
         client,
         sessions
     };
+}
+
+export async function getAdminAudit(env, { limit: limitInput = 50 } = {}) {
+    assertDatabase(env);
+
+    const limit = normalizeLimit(limitInput);
+
+    const result = await env.DB.prepare(`
+        SELECT
+            id,
+            at,
+            actor,
+            action,
+            target_type,
+            target_id
+        FROM admin_audit
+        ORDER BY at DESC, id DESC
+        LIMIT ?
+    `).bind(limit).all();
+
+    return result.results ?? [];
 }
 
 export async function getAdminSessions(
@@ -468,27 +507,68 @@ export async function getAdminSessionDetails(env, sessionId) {
     `).bind(sessionId).first();
 }
 
-export async function invalidateAdminSession(env, sessionId) {
+export async function invalidateAdminSession(env, sessionId, actor) {
     assertDatabase(env);
 
-    const result = await env.DB.prepare(`
-        UPDATE auth_sessions
-        SET
-            status = 'expired',
-            authorization_code = NULL,
-            result_ciphertext = NULL,
-            failure_code = 'admin_invalidated'
-        WHERE session_id = ?
-          AND status IN ('pending', 'code_received')
-    `).bind(sessionId).run();
+    if (
+        typeof actor !== "string" ||
+        !actor.trim() ||
+        actor.length > 100
+    ) {
+        throw new Error("Invalid audit actor.");
+    }
 
-    const session = await getAdminSessionDetails(env, sessionId);
+    const now = Math.floor(Date.now() / 1000);
+    const auditId = crypto.randomUUID();
+
+    const results = await env.DB.batch([
+        // 1. Invalidate the session and clear any sensitive result.
+        env.DB.prepare(`
+            UPDATE auth_sessions
+            SET
+                status = 'expired',
+                authorization_code = NULL,
+                result_ciphertext = NULL,
+                failure_code = 'admin_invalidated'
+            WHERE session_id = ?
+              AND status IN (
+                  'pending',
+                  'code_received',
+                  'processing',
+                  'ready'
+              )
+        `).bind(sessionId),
+
+        // 2. Record the action only if the UPDATE changed a row.
+        env.DB.prepare(`
+            INSERT INTO admin_audit (
+                id,
+                at,
+                actor,
+                action,
+                target_type,
+                target_id
+            )
+            SELECT ?, ?, ?, 'session.invalidate', 'session', ?
+            WHERE changes() = 1
+        `).bind(
+            auditId,
+            now,
+            actor,
+            sessionId
+        )
+    ]);
+
+    const session = await getAdminSessionDetails(
+        env,
+        sessionId
+    );
 
     if (!session) {
         return { outcome: "not_found" };
     }
 
-    if ((result.meta?.changes ?? 0) !== 1) {
+    if ((results[0]?.meta?.changes ?? 0) !== 1) {
         return {
             outcome: "not_active",
             session
