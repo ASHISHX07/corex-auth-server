@@ -6,6 +6,7 @@ import {
     notFoundHandler,
     apiErrorHandler
 } from "./errors.js";
+import createAuthRouter from "../modules/auth/auth.routes.js";
 
 export function createApp(env) {
     const app = express();
@@ -49,6 +50,9 @@ export function createApp(env) {
             status: "ok"
         });
     });
+
+    // V3 authentication module.
+    app.use("/api/v3/auth", createAuthRouter(env));
 
     app.use(notFoundHandler);
     app.use(apiErrorHandler);

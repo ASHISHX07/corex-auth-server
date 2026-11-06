@@ -31,6 +31,11 @@ for (const brokerId of BROKER_IDS) {
             Array.isArray(provider.credentialFields)
         );
 
+        assert.ok(
+            provider.credentialFields.includes("appId"),
+            "Every provider must declare its normalized appId field."
+        );
+
         assert.equal(
             typeof provider.validateCredentials,
             "function"
