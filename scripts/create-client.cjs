@@ -31,10 +31,51 @@ const createdBy = "cli";
 const clientId = crypto.randomUUID();
 const auditId = crypto.randomUUID();
 
-const sql =
-    "INSERT INTO corex_clients (corex_client_id, api_key_hash, key_hint, display_name, scopes, status, created_at, created_by) " +
-    `VALUES ('${clientId}', '${hash}', '${name.replace(/'/g, "''")}', 'active', strftime('%s','now'));`;
+const safeName = name.replace(/'/g, "''");
 
+const clientInsert = `
+    INSERT INTO corex_clients (
+        corex_client_id,
+        api_key_hash,
+        key_hint,
+        display_name,
+        scopes,
+        status,
+        created_at,
+        created_by
+    )
+    VALUES (
+        '${clientId}',
+        '${hash}',
+        '${keyHint}',
+        '${safeName}',
+        '${scopes}',
+        'active',
+        strftime('%s', 'now'),
+        '${createdBy}'
+    );
+`;
+
+const auditInsert = `
+    INSERT INTO admin_audit (
+        id,
+        at,
+        actor,
+        action,
+        target_type,
+        target_id
+    )
+    VALUES (
+        '${auditId}',
+        strftime('%s', 'now'),
+        '${createdBy}',
+        'client.create',
+        'client',
+        '${clientId}'
+    );
+`;
+
+const sql = `${clientInsert}\n${auditInsert}`;
 if (target) {
     const file = path.join(os.tmpdir(), `corex-client-${clientId}.sql`);
     fs.writeFileSync(file, sql, { mode: 0o600 });

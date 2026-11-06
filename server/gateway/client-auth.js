@@ -2,6 +2,25 @@ import { sha256Hex } from "../security/hashing.js";
 
 const LAST_SEEN_INTERVAL_SECONDS = 300;
 
+function parseScopes(value) {
+    let scopes;
+
+    try {
+        scopes = JSON.parse(value);
+    } catch {
+        throw new Error("Invalid client scopes.");
+    }
+
+    if (
+        !Array.isArray(scopes) ||
+        !scopes.every(scope => typeof scope === "string")
+    ) {
+        throw new Error("Invalid client scopes.");
+    }
+
+    return [...new Set(scopes)];
+}
+
 export function requireCorexClient(env) {
     return async (req, res, next) => {
         const authorization = req.get("authorization") ?? "";
@@ -15,9 +34,9 @@ export function requireCorexClient(env) {
 
         try {
             const apiKeyHash = await sha256Hex(match[1]);
-
+            
             const client = await env.DB
-                .prepare(`
+            .prepare(`
                     SELECT corex_client_id, display_name, scopes, last_seen_at
                     FROM corex_clients
                     WHERE api_key_hash = ?
@@ -26,14 +45,14 @@ export function requireCorexClient(env) {
                 `)
                 .bind(apiKeyHash)
                 .first();
-
-            if (!client) {
-                return res.status(401).json({
-                    error: "unauthorized"
-                });
-            }
-
-            const scopes = JSON.parse(client.scopes);
+                
+                if (!client) {
+                    return res.status(401).json({
+                        error: "unauthorized"
+                    });
+                }
+                
+            const scopes = parseScopes(client.scopes);
             if (!scopes.includes("auth")) {
                 return res.status(403).json({
                     error: "forbidden_scope",
