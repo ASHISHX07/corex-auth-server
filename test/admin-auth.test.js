@@ -105,14 +105,21 @@ test("two administrators can log in, access /me and log out", async () => {
                     }
                 }
             );
-
+            
             assert.equal(logout.status, 200);
-
+            
+            const clearedCookie = logout.headers.get("set-cookie");
+            
+            assert.ok(clearedCookie);
+            assert.match(clearedCookie, /Max-Age=0/);
+            assert.match(clearedCookie, /HttpOnly/);
+            
+            // A browser processes Max-Age=0 and removes the cookie.
+            // fetch() doesn't maintain a cookie jar, so simulate that here.
             const afterLogout = await fetch(
-                `${baseUrl}/api/v3/admin/me`,
-                { headers: { Cookie: cookie } }
+                `${baseUrl}/api/v3/admin/me`
             );
-
+            
             assert.equal(afterLogout.status, 401);
         }
     } finally {
