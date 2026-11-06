@@ -8,6 +8,7 @@ import {
 } from "./errors.js";
 import createAuthRouter from "../modules/auth/auth.routes.js";
 import createAuthCallbackRouter from "../modules/auth/callback.routes.js";
+import createAdminRouter from "../admin/admin.routes.js";
 
 export function createApp(env, waitUntil) {
     const app = express();
@@ -59,6 +60,9 @@ export function createApp(env, waitUntil) {
 
     // Public broker callbacks and authorization status page.
     app.use("/auth", createAuthCallbackRouter(env));
+
+    // Private administrator module.
+    app.use("/api/v3/admin", createAdminRouter(env));
 
     app.use(notFoundHandler);
     app.use(apiErrorHandler);
