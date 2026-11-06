@@ -1,5 +1,5 @@
 import express from "express";
-
+import { requestLogger } from "./request-logger.js";
 import { requestId } from "./request-id.js";
 import {
     sendApiError,
@@ -9,7 +9,7 @@ import {
 import createAuthRouter from "../modules/auth/auth.routes.js";
 import createAuthCallbackRouter from "../modules/auth/callback.routes.js";
 
-export function createApp(env) {
+export function createApp(env, waitUntil) {
     const app = express();
 
     app.disable("x-powered-by");
@@ -21,6 +21,8 @@ export function createApp(env) {
         res.set("Cache-Control", "no-store");
         next();
     });
+
+    app.use(requestLogger(env, waitUntil));
 
     // API requests containing a body must use JSON.
     app.use("/api", (req, res, next) => {

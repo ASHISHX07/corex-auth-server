@@ -696,13 +696,19 @@ async function expireSession(env, sessionId, clientId, now) {
         UPDATE auth_sessions
         SET
             status = 'expired',
+            authorization_code = NULL,
             result_ciphertext = NULL,
             failure_code = 'session_expired'
         WHERE session_id = ?
-          AND corex_client_id = ?
-          AND api_version = 3
-          AND status IN ('pending', 'ready')
-          AND expires_at <= ?
+            AND corex_client_id = ?
+            AND api_version = 3
+            AND status IN (
+                'pending',
+                'processing',
+                'ready',
+                'failed'
+            )
+            AND expires_at <= ?
     `).bind(sessionId, clientId, now).run();
 }
 
@@ -751,7 +757,7 @@ export async function getAuthSessionResult(
     let now = Math.floor(Date.now() / 1000);
 
     if (
-        ["pending", "ready"].includes(session.status) &&
+        ["pending", "processing", "ready", "failed"].includes(session.status) &&
         session.expires_at <= now
     ) {
         await expireSession(env, sessionId, clientId, now);

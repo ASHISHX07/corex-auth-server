@@ -25,7 +25,22 @@ async function createContext() {
     const env = {
         DB,
         COREX_MASTER_KEY: randomBase64Url(32),
-        PUBLIC_BASE_URL: "https://auth.example.com"
+        PUBLIC_BASE_URL: "https://auth.example.com",
+        AUTH_SESSION_LIMITER: {
+            async limit() {
+                return { success: true };
+            }
+        },
+        AUTH_POLL_LIMITER: {
+            async limit() {
+                return { success: true };
+            }
+        },
+        CALLBACK_LIMITER: {
+            async limit() {
+                return { success: true };
+            }
+        }
     };
 
     const clientId = "test-client";

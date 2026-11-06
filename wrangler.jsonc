@@ -13,10 +13,43 @@
 
     "d1_databases": [
         {
-        "binding": "DB",
-        "database_name": "corex-db",
-        "database_id": "95587b10-6f24-43be-acd8-71869a4fa55d",
-        "migrations_dir": "db/migrations"
+            "binding": "DB",
+            "database_name": "corex-db",
+            "database_id": "95587b10-6f24-43be-acd8-71869a4fa55d",
+            "migrations_dir": "db/migrations"
         }
-    ]
+    ],
+
+    "ratelimits": [
+        {
+            "name": "AUTH_SESSION_LIMITER",
+            "namespace_id": "68420101",
+            "simple": {
+                "limit": 10,
+                "period": 60
+            }
+        },
+        {
+            "name": "AUTH_POLL_LIMITER",
+            "namespace_id": "68420104",
+            "simple": {
+                "limit": 120,
+                "period": 60
+            }
+        },
+        {
+            "name": "CALLBACK_LIMITER",
+            "namespace_id": "68420102",
+            "simple": {
+                "limit": 120,
+                "period": 60
+            }
+        }
+    ],
+
+    "triggers": {
+        "crons": [
+            "*/10 * * * *"
+        ]
+    }
 }

@@ -1,5 +1,5 @@
 import { Router } from "express";
-
+import { rateLimit } from "../../gateway/rate-limits.js";
 import { completeAuthCallback } from "./auth.service.js";
 
 const STATUS_MESSAGES = Object.freeze({
@@ -76,28 +76,36 @@ export default function createAuthCallbackRouter(env) {
     });
 
     // Public broker redirect target.
-    router.get("/:broker/callback", async (req, res) => {
-        let status = "unavailable";
+    router.get("/:broker/callback",
+        rateLimit(env, "CALLBACK_LIMITER",
+            req => {
+                const ip = req.get("cf-connecting-ip") || "unknown";
+                return `${req.params.broker}:${ip}`;
+            }
+        ),
+        
+        async (req, res) => {
+            let status = "unavailable";
 
-        try {
-            status = await completeAuthCallback(env, {
-                broker: req.params.broker,
-                state: req.query.state,
-                query: req.query
-            });
-        } catch (error) {
-            // Never log the callback URL, authorization code,
-            // OAuth state, credentials or provider response.
-            console.error("Broker callback failed", {
-                requestId: req.requestId,
-                errorName: error instanceof Error
-                    ? error.name
-                    : "UnknownError"
-            });
-        }
+            try {
+                status = await completeAuthCallback(env, {
+                    broker: req.params.broker,
+                    state: req.query.state,
+                    query: req.query
+                });
+            } catch (error) {
+                // Never log the callback URL, authorization code,
+                // OAuth state, credentials or provider response.
+                console.error("Broker callback failed", {
+                    requestId: req.requestId,
+                    errorName: error instanceof Error
+                        ? error.name
+                        : "UnknownError"
+                });
+            }
 
         return redirectToStatus(res, status);
-    });
+        });
 
     return router;
 }

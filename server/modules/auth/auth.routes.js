@@ -3,6 +3,7 @@ import { Router } from "express";
 import { requireClientAuth } from "../../gateway/client-auth.js";
 import { sendApiError } from "../../gateway/errors.js";
 import { createAuthSession, getAuthSessionResult } from "./auth.service.js";
+import { rateLimit } from "../../gateway/rate-limits.js";
 
 const ERROR_MESSAGES = {
     invalid_request: "The request contains invalid data.",
@@ -30,6 +31,8 @@ export default function createAuthRouter(env) {
     router.post(
         "/sessions",
         requireClientAuth(env, "auth"),
+        rateLimit(env, "AUTH_SESSION_LIMITER", req => req.corexClient.id),
+
         async (req, res) => {
             const result = await createAuthSession(env, {
                 clientId: req.corexClient.id,
@@ -60,6 +63,8 @@ export default function createAuthRouter(env) {
     router.post(
         "/sessions/:sessionId/result",
         requireClientAuth(env, "auth"),
+        rateLimit(env, "AUTH_POLL_LIMITER", req => req.corexClient.id),
+
         async (req, res) => {
             const result = await getAuthSessionResult(env, {
                 sessionId: req.params.sessionId,
