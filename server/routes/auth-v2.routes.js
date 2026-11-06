@@ -3,9 +3,9 @@ import {
     createAuthSessionV2,
     getAuthSessionResultV2
 } from "../services/auth-sessions-v2.service.js";
-import { requireCorexClient } from "../middleware/require-corex-client.js";
-import { limitSessionCreation, limitSessionPolling } from "../middleware/rate-limits.js";
-import { BROKER_IDS } from "../providers/provider-registry.js";
+import { requireCorexClient } from "../middleware/require-admin.js";
+import { limitSessionCreation, limitSessionPolling } from "../gateway/rate-limits.js";
+import { BROKER_IDS } from "../brokers/provider-registry.js";
 
 const FIELD_MAX_LENGTH = { broker: 32, appId: 200, appSecret: 512, clientPublicKey: 128 };
 

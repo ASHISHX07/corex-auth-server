@@ -1,5 +1,5 @@
-import { getProvider } from "../providers/provider-registry.js";
-import { ProviderError } from "../providers/provider-error.js";
+import { getProvider } from "../brokers/provider-registry.js";
+import { ProviderError } from "../brokers/provider-error.js";
 import {
     sealState, openState, encryptForClient, importClientPublicKey
 } from "../security/legacy-v2.js";

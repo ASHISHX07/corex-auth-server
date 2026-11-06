@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { webcrypto as crypto } from "node:crypto";
 import { createD1 } from "./d1-shim.mjs";
-import { createApp } from "../server/app.js";
+import { createApp } from "../server/gateway/app.js";
 import { sha256Hex } from "../server/security/hashing.js";
+
+import {
+    getBrokerRedirectUri,
+    getPublicBaseUrl
+} from "../server/gateway/config.js";
 
 import {
     toBase64Url,
@@ -31,10 +36,14 @@ const REDIRECT = "https://corex-server.example.workers.dev/auth/upstox/callback"
 const db = createD1(fileURLToPath(new URL("../db/migrations", import.meta.url)));
 const limiter = { limit: async () => ({ success: true }) };
 const env = {
-    DB: db, UPSTOX_REDIRECT_URI: REDIRECT,
+    DB: db,
+    PUBLIC_BASE_URL: "https://corex-server.example.workers.dev",
+    UPSTOX_REDIRECT_URI: REDIRECT,
     COREX_MASTER_KEY: toBase64Url(crypto.getRandomValues(new Uint8Array(32))),
     COREX_STATE_KEY: toBase64Url(crypto.getRandomValues(new Uint8Array(32))),
-    AUTH_SESSION_LIMITER: limiter, AUTH_POLL_LIMITER: limiter, CALLBACK_LIMITER: limiter
+    AUTH_SESSION_LIMITER: limiter,
+    AUTH_POLL_LIMITER: limiter,
+    CALLBACK_LIMITER: limiter
 };
 
 // --- fake Upstox; everything else goes to the real fetch ---
@@ -380,6 +389,129 @@ await test("v3 key derivation rejects missing or invalid master keys", async () 
     await assert.rejects(
         derivePurposeKey(env, "unknown"),
         /purpose/
+    );
+});
+
+
+await test("gateway assigns a request ID and logs the same ID", async () => {
+    const response = await call("/api/health");
+
+    assert.equal(response.status, 200);
+
+    const requestId = response.headers.get("x-request-id");
+
+    assert.match(
+        requestId,
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    );
+
+    assert.equal(
+        response.headers.get("cache-control"),
+        "no-store"
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const row = db.raw.prepare(`
+        SELECT request_id
+        FROM request_logs
+        WHERE request_id = ?
+    `).get(requestId);
+
+    assert.equal(row?.request_id, requestId);
+});
+
+await test("gateway returns standardized JSON errors", async () => {
+    const malformed = await realFetch(
+        `${base}/api/v2/auth/sessions`,
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: "{"
+        }
+    );
+
+    assert.equal(malformed.status, 400);
+    assert.equal(
+        (await malformed.json()).error,
+        "invalid_json"
+    );
+
+    const oversized = await realFetch(
+        `${base}/api/v2/auth/sessions`,
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                payload: "x".repeat(17_000)
+            })
+        }
+    );
+
+    assert.equal(oversized.status, 413);
+    assert.equal(
+        (await oversized.json()).error,
+        "payload_too_large"
+    );
+
+    const unknown = await call("/api/v3/unknown-endpoint");
+
+    assert.equal(unknown.status, 404);
+    assert.deepEqual(
+        await unknown.json(),
+        {
+            error: "not_found",
+            message: "The requested API endpoint was not found."
+        }
+    );
+
+    assert.ok(unknown.headers.get("x-request-id"));
+});
+
+await test("PUBLIC_BASE_URL generates validated broker callback URLs", async () => {
+    assert.equal(
+        getPublicBaseUrl(env),
+        "https://corex-server.example.workers.dev"
+    );
+
+    assert.equal(
+        getBrokerRedirectUri(env, "upstox"),
+        "https://corex-server.example.workers.dev/auth/upstox/callback"
+    );
+
+    assert.equal(
+        getBrokerRedirectUri(env, "zerodha"),
+        "https://corex-server.example.workers.dev/auth/zerodha/callback"
+    );
+
+    assert.throws(
+        () => getBrokerRedirectUri(env, "../invalid"),
+        /broker identifier/
+    );
+
+    assert.throws(
+        () => getPublicBaseUrl({}),
+        /PUBLIC_BASE_URL/
+    );
+
+    assert.throws(
+        () => getPublicBaseUrl({
+            PUBLIC_BASE_URL: "http://example.com"
+        }),
+        /HTTPS origin/
+    );
+
+    assert.equal(
+        getBrokerRedirectUri({
+            PUBLIC_BASE_URL: "http://127.0.0.1:8787"
+        }, "upstox"),
+        "http://127.0.0.1:8787/auth/upstox/callback"
     );
 });
 

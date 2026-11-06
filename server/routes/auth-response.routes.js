@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { BROKER_IDS } from "../providers/provider-registry.js";
+import { BROKER_IDS } from "../brokers/provider-registry.js";
 
 // Registered brokers are always allowed; the rest only affect the label shown.
 const ALLOWED_BROKERS = new Set([

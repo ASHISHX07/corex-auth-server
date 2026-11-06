@@ -6,7 +6,7 @@ import {
     isSameOriginRequest
 } from "../middleware/require-admin.js";
 
-import { limitAdminLogin } from "../middleware/rate-limits.js";
+import { limitAdminLogin } from "../gateway/rate-limits.js";
 
 import {
     createAdminSessionToken,

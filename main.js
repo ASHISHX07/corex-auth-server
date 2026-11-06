@@ -1,6 +1,6 @@
 import { httpServerHandler } from "cloudflare:node";
 import { env } from "cloudflare:workers";
-import { createApp } from "./server/app.js";
+import { createApp } from "./server/gateway/app.js";
 import { runMaintenance } from "./server/services/maintenance.service.js";
 
 const port = 3000;

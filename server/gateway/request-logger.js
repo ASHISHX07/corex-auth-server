@@ -1,6 +1,6 @@
 import { waitUntil } from "cloudflare:workers";
 
-import { BROKER_IDS } from "../providers/provider-registry.js";
+import { BROKER_IDS } from "../brokers/provider-registry.js";
 
 const ALLOWED_BROKERS = new Set(BROKER_IDS);
 const CALLBACK_PATH = /^\/auth\/([a-z0-9_-]{2,32})\/callback$/;
@@ -8,6 +8,10 @@ const RESULT_PATH = /^\/api\/v\d+\/auth\/sessions\/[^/]+\/result$/;
 
 function normalizePath(path) {
     const patterns = [
+        [
+            /^\/api\/v3\/auth\/sessions\/[^/]+\/result$/,
+            "/api/v3/auth/sessions/:sessionId/result"
+        ],
         [
             /^\/api\/v1\/auth\/sessions\/[^/]+\/result$/,
             "/api/v1/auth/sessions/:sessionId/result"
@@ -100,7 +104,7 @@ export function requestLogger(env) {
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `).bind(
-                crypto.randomUUID(),
+                req.requestId,
                 req.method,
                 normalizedPath,
                 res.statusCode,

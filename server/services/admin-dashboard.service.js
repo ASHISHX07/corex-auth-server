@@ -1,4 +1,4 @@
-import { BROKER_IDS } from "../providers/provider-registry.js";
+import { BROKER_IDS } from "../brokers/provider-registry.js";
 
 const BROKERS = new Set(BROKER_IDS);
 const SESSION_STATUSES = new Set([
