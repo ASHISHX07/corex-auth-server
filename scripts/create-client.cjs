@@ -18,11 +18,21 @@ if (!name || name.length > 80 || /[\u0000-\u001f]/.test(name)) {
     process.exit(1);
 }
 
-const apiKey = crypto.randomBytes(32).toString("base64url"); // 43 chars, matches the server's key format
-const hash = crypto.createHash("sha256").update(apiKey).digest("hex");
+const apiKey = `cx_${crypto.randomBytes(32).toString("base64url")}`;
+const hash = crypto
+    .createHash("sha256")
+    .update(apiKey)
+    .digest("hex");
+
+const keyHint = apiKey.slice(-4);
+const scopes = '["auth"]';
+const createdBy = "cli";
+
 const clientId = crypto.randomUUID();
+const auditId = crypto.randomUUID();
+
 const sql =
-    "INSERT INTO corex_clients (corex_client_id, api_key_hash, display_name, status, created_at) " +
+    "INSERT INTO corex_clients (corex_client_id, api_key_hash, key_hint, display_name, scopes, status, created_at, created_by) " +
     `VALUES ('${clientId}', '${hash}', '${name.replace(/'/g, "''")}', 'active', strftime('%s','now'));`;
 
 if (target) {

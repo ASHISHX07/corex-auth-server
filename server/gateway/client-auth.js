@@ -5,8 +5,7 @@ const LAST_SEEN_INTERVAL_SECONDS = 300;
 export function requireCorexClient(env) {
     return async (req, res, next) => {
         const authorization = req.get("authorization") ?? "";
-        const match = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(authorization);
-
+        const match = /^Bearer ((?:cx_)?[A-Za-z0-9_-]{43})$/.exec(authorization);
         if (!match) {
             res.set("WWW-Authenticate", "Bearer");
             return res.status(401).json({
@@ -19,7 +18,7 @@ export function requireCorexClient(env) {
 
             const client = await env.DB
                 .prepare(`
-                    SELECT corex_client_id, display_name, last_seen_at
+                    SELECT corex_client_id, display_name, scopes, last_seen_at
                     FROM corex_clients
                     WHERE api_key_hash = ?
                       AND status = 'active'
@@ -31,6 +30,14 @@ export function requireCorexClient(env) {
             if (!client) {
                 return res.status(401).json({
                     error: "unauthorized"
+                });
+            }
+
+            const scopes = JSON.parse(client.scopes);
+            if (!scopes.includes("auth")) {
+                return res.status(403).json({
+                    error: "forbidden_scope",
+                    message: "The client is missing the required scope."
                 });
             }
 
@@ -57,7 +64,8 @@ export function requireCorexClient(env) {
 
             req.corexClient = {
                 id: client.corex_client_id,
-                displayName: client.display_name
+                displayName: client.display_name,
+                scopes
             };
 
             return next();
