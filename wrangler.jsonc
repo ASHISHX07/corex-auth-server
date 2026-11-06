@@ -1,13 +1,22 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
+    "$schema": "./node_modules/wrangler/config-schema.json",
 
-  "name": "corex-server-v3",
-  "main": "main.js",
+    "name": "corex-server-v3",
+    "main": "main.js",
 
-  "compatibility_date": "2026-11-06",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
+    "compatibility_date": "2026-11-06",
+    "compatibility_flags": [
+        "nodejs_compat"
+    ],
 
-  "workers_dev": true
+    "workers_dev": true,
+
+    "d1_databases": [
+        {
+        "binding": "DB",
+        "database_name": "corex-db",
+        "database_id": "95587b10-6f24-43be-acd8-71869a4fa55d",
+        "migrations_dir": "db/migrations"
+        }
+    ]
 }

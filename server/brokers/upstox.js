@@ -1,10 +1,10 @@
 import { ProviderError } from "./provider-error.js";
 
 const AUTHORIZATION_URL =
-    "https://api.upstox.com/v3/login/authorization/dialog";
+    "https://api.upstox.com/v2/login/authorization/dialog";
 
 const TOKEN_URL =
-    "https://api.upstox.com/v3/login/authorization/token";
+    "https://api.upstox.com/v2/login/authorization/token";
 
 const EXCHANGE_TIMEOUT_MS = 8000;
 
