@@ -2,18 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { fileURLToPath } from "node:url";
-
 import { createApp } from "../server/gateway/app.js";
 import { createD1 } from "./d1.js";
-
 import { sha256Hex } from "../server/security/hashing.js";
-
+import { randomBase64Url } from "../server/security/encoding.js";
 import {
-    randomBase64Url
-} from "../server/security/encoding.js";
-
-import {
-    openOAuthState
+    openOAuthState,
+    sealOAuthState,
+    openTokenResult
 } from "../server/security/seal.js";
 
 const MIGRATIONS_DIRECTORY = fileURLToPath(
@@ -402,4 +398,458 @@ test("enforces ten session creations per minute", async () => {
             "rate_limit_exceeded"
         );
     });
+});
+
+const UPSTOX_TOKEN_URL =
+    "https://api.upstox.com/v2/login/authorization/token";
+
+async function withMockedUpstox(mockResponse, callback) {
+    const originalFetch = globalThis.fetch;
+
+    let calls = 0;
+    let request = null;
+
+    globalThis.fetch = async (url, options) => {
+        if (String(url) === UPSTOX_TOKEN_URL) {
+            calls++;
+
+            request = {
+                url: String(url),
+                options
+            };
+
+            return mockResponse(url, options);
+        }
+
+        return originalFetch(url, options);
+    };
+
+    try {
+        return await callback({
+            get calls() {
+                return calls;
+            },
+
+            get request() {
+                return request;
+            }
+        });
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+}
+
+async function callBrokerCallback(
+    baseUrl,
+    broker,
+    state,
+    parameters = {}
+) {
+    const query = new URLSearchParams({
+        ...parameters,
+        state
+    });
+
+    return fetch(
+        `${baseUrl}/auth/${broker}/callback?${query}`,
+        { redirect: "manual" }
+    );
+}
+
+function callbackStatus(response, baseUrl) {
+    const location = response.headers.get("location");
+
+    return new URL(location, baseUrl)
+        .searchParams
+        .get("status");
+}
+
+test("callback exchanges the code and stores a normalized encrypted result", async () => {
+    const context = await createContext();
+
+    await withMockedUpstox(
+        async () => Response.json({
+            access_token: "ACCESS-TOKEN",
+            extended_token: "DO-NOT-STORE",
+            user_id: "USER-123",
+            user_name: "Example User",
+            email: "user@example.com",
+            broker: "UPSTOX"
+        }),
+
+        async mock => {
+            await withServer(context, async baseUrl => {
+                const created = await createSession(
+                    baseUrl,
+                    context.apiKey
+                );
+
+                assert.equal(created.status, 201);
+
+                const session = await created.json();
+
+                const state = new URL(session.authorizationUrl)
+                    .searchParams
+                    .get("state");
+
+                const response = await callBrokerCallback(
+                    baseUrl,
+                    "upstox",
+                    state,
+                    { code: "AUTH-CODE" }
+                );
+
+                assert.equal(response.status, 303);
+                assert.equal(
+                    callbackStatus(response, baseUrl),
+                    "received"
+                );
+
+                assert.equal(mock.calls, 1);
+
+                const request = mock.request;
+
+                assert.equal(
+                    request.url,
+                    UPSTOX_TOKEN_URL
+                );
+
+                const form = Object.fromEntries(
+                    new URLSearchParams(request.options.body)
+                );
+
+                assert.deepEqual(form, {
+                    code: "AUTH-CODE",
+                    client_id: APP_ID,
+                    client_secret: APP_SECRET,
+                    redirect_uri:
+                        "https://auth.example.com/auth/upstox/callback",
+                    grant_type: "authorization_code"
+                });
+
+                const row = await context.DB.prepare(`
+                    SELECT *
+                    FROM auth_sessions
+                    WHERE session_id = ?
+                `).bind(session.sessionId).first();
+
+                assert.equal(row.status, "ready");
+                assert.equal(row.authorization_code, null);
+                assert.ok(row.result_ciphertext);
+
+                assert.equal(
+                    row.result_ciphertext.includes("ACCESS-TOKEN"),
+                    false
+                );
+
+                assert.equal(
+                    row.result_ciphertext.includes(APP_SECRET),
+                    false
+                );
+
+                const result = await openTokenResult(
+                    context.env,
+                    {
+                        sessionId: session.sessionId,
+                        broker: "upstox",
+                        ciphertext: row.result_ciphertext
+                    }
+                );
+
+                assert.equal(
+                    result.token.accessToken,
+                    "ACCESS-TOKEN"
+                );
+
+                assert.equal(
+                    result.token.tokenType,
+                    "Bearer"
+                );
+
+                assert.ok(
+                    Date.parse(result.token.tokenExpiresAt) > Date.now()
+                );
+
+                assert.deepEqual(result.profile, {
+                    userId: "USER-123",
+                    userName: "Example User",
+                    email: "user@example.com"
+                });
+
+                assert.equal(
+                    JSON.stringify(result).includes("DO-NOT-STORE"),
+                    false
+                );
+            });
+        }
+    );
+});
+
+test("replayed callback cannot exchange or store the token twice", async () => {
+    const context = await createContext();
+
+    await withMockedUpstox(
+        async () => Response.json({
+            access_token: "ACCESS-TOKEN"
+        }),
+
+        async mock => {
+            await withServer(context, async baseUrl => {
+                const created = await createSession(
+                    baseUrl,
+                    context.apiKey
+                );
+
+                const session = await created.json();
+
+                const state = new URL(session.authorizationUrl)
+                    .searchParams
+                    .get("state");
+
+                const first = await callBrokerCallback(
+                    baseUrl,
+                    "upstox",
+                    state,
+                    { code: "AUTH-CODE" }
+                );
+
+                assert.equal(callbackStatus(first, baseUrl), "received");
+                assert.equal(mock.calls, 1);
+
+                const replay = await callBrokerCallback(
+                    baseUrl,
+                    "upstox",
+                    state,
+                    { code: "AUTH-CODE" }
+                );
+
+                assert.equal(callbackStatus(replay, baseUrl), "invalid");
+                assert.equal(mock.calls, 1);
+
+                const row = await context.DB.prepare(`
+                    SELECT status, result_ciphertext
+                    FROM auth_sessions
+                    WHERE session_id = ?
+                `).bind(session.sessionId).first();
+
+                assert.equal(row.status, "ready");
+                assert.ok(row.result_ciphertext);
+            });
+        }
+    );
+});
+
+test("broker denial marks the session failed without exchanging a token", async () => {
+    const context = await createContext();
+
+    await withMockedUpstox(
+        async () => {
+            throw new Error("Token exchange must not be called.");
+        },
+
+        async mock => {
+            await withServer(context, async baseUrl => {
+                const created = await createSession(
+                    baseUrl,
+                    context.apiKey
+                );
+
+                const session = await created.json();
+
+                const state = new URL(session.authorizationUrl)
+                    .searchParams
+                    .get("state");
+
+                const response = await callBrokerCallback(
+                    baseUrl,
+                    "upstox",
+                    state,
+                    { error: "access_denied" }
+                );
+
+                assert.equal(callbackStatus(response, baseUrl), "failed");
+                assert.equal(mock.calls, 0);
+
+                const row = await context.DB.prepare(`
+                    SELECT status, failure_code, result_ciphertext
+                    FROM auth_sessions
+                    WHERE session_id = ?
+                `).bind(session.sessionId).first();
+
+                assert.equal(row.status, "failed");
+                assert.equal(row.failure_code, "authorization_denied");
+                assert.equal(row.result_ciphertext, null);
+            });
+        }
+    );
+});
+
+test("tampered callback state cannot claim a session", async () => {
+    const context = await createContext();
+
+    await withMockedUpstox(
+        async () => {
+            throw new Error("Token exchange must not be called.");
+        },
+
+        async mock => {
+            await withServer(context, async baseUrl => {
+                const created = await createSession(
+                    baseUrl,
+                    context.apiKey
+                );
+
+                const session = await created.json();
+
+                const state = new URL(session.authorizationUrl)
+                    .searchParams
+                    .get("state");
+
+                const index = 10;
+
+                const tampered =
+                    state.slice(0, index) +
+                    (state[index] === "A" ? "B" : "A") +
+                    state.slice(index + 1);
+
+                const response = await callBrokerCallback(
+                    baseUrl,
+                    "upstox",
+                    tampered,
+                    { code: "AUTH-CODE" }
+                );
+
+                assert.equal(callbackStatus(response, baseUrl), "invalid");
+                assert.equal(mock.calls, 0);
+
+                const row = await context.DB.prepare(`
+                    SELECT status
+                    FROM auth_sessions
+                    WHERE session_id = ?
+                `).bind(session.sessionId).first();
+
+                assert.equal(row.status, "pending");
+            });
+        }
+    );
+});
+
+test("expired callback state cannot start a token exchange", async () => {
+    const context = await createContext();
+
+    await withMockedUpstox(
+        async () => {
+            throw new Error("Token exchange must not be called.");
+        },
+
+        async mock => {
+            await withServer(context, async baseUrl => {
+                const created = await createSession(
+                    baseUrl,
+                    context.apiKey
+                );
+
+                const session = await created.json();
+
+                const originalState = new URL(session.authorizationUrl)
+                    .searchParams
+                    .get("state");
+
+                const claims = await openOAuthState(
+                    context.env,
+                    originalState
+                );
+
+                const now = Math.floor(Date.now() / 1000);
+                const expiredAt = now - 10;
+
+                claims.expiresAt = expiredAt;
+
+                await context.DB.prepare(`
+                    UPDATE auth_sessions
+                    SET created_at = ?, expires_at = ?
+                    WHERE session_id = ?
+                `).bind(
+                    now - 600,
+                    expiredAt,
+                    session.sessionId
+                ).run();
+
+                const expiredState = await sealOAuthState(
+                    context.env,
+                    claims
+                );
+
+                const response = await callBrokerCallback(
+                    baseUrl,
+                    "upstox",
+                    expiredState,
+                    { code: "AUTH-CODE" }
+                );
+
+                assert.equal(callbackStatus(response, baseUrl), "expired");
+                assert.equal(mock.calls, 0);
+
+                const row = await context.DB.prepare(`
+                    SELECT status, failure_code
+                    FROM auth_sessions
+                    WHERE session_id = ?
+                `).bind(session.sessionId).first();
+
+                assert.equal(row.status, "expired");
+                assert.equal(row.failure_code, "session_expired");
+            });
+        }
+    );
+});
+
+test("broker token rejection marks the session failed safely", async () => {
+    const context = await createContext();
+
+    await withMockedUpstox(
+        async () => new Response(
+            '{"message":"Invalid secret"}',
+            { status: 401 }
+        ),
+
+        async mock => {
+            await withServer(context, async baseUrl => {
+                const created = await createSession(
+                    baseUrl,
+                    context.apiKey
+                );
+
+                const session = await created.json();
+
+                const state = new URL(session.authorizationUrl)
+                    .searchParams
+                    .get("state");
+
+                const response = await callBrokerCallback(
+                    baseUrl,
+                    "upstox",
+                    state,
+                    { code: "AUTH-CODE" }
+                );
+
+                assert.equal(callbackStatus(response, baseUrl), "failed");
+                assert.equal(mock.calls, 1);
+
+                const row = await context.DB.prepare(`
+                    SELECT status, failure_code, result_ciphertext
+                    FROM auth_sessions
+                    WHERE session_id = ?
+                `).bind(session.sessionId).first();
+
+                assert.equal(row.status, "failed");
+                assert.equal(row.failure_code, "exchange_rejected");
+                assert.equal(row.result_ciphertext, null);
+
+                assert.equal(
+                    JSON.stringify(row).includes("Invalid secret"),
+                    false
+                );
+            });
+        }
+    );
 });

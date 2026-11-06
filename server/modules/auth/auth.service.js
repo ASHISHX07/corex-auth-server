@@ -1,18 +1,18 @@
 import { getProvider } from "../../brokers/registry.js";
 import { getBrokerRedirectUri } from "../../gateway/config.js";
 import { randomBase64Url } from "../../security/encoding.js";
-import { sealOAuthState } from "../../security/seal.js";
+import { ProviderError } from "../../brokers/provider-error.js";
+
+import {
+    openOAuthState,
+    sealOAuthState,
+    sealTokenResult
+} from "../../security/seal.js";
 
 const SESSION_TTL_SECONDS = 300;
 const MAX_UNFINISHED_SESSIONS = 5;
 const MAX_CREATIONS_PER_MINUTE = 10;
 const MAX_CREDENTIAL_BYTES = 1024;
-
-const ACTIVE_STATUSES = [
-    "pending",
-    "processing",
-    "ready"
-];
 
 const encoder = new TextEncoder();
 
@@ -323,4 +323,350 @@ export async function createAuthSession(env, {
             expiresAt * 1000
         ).toISOString()
     };
+}
+
+const CALLBACK_FAILURE_CODES = new Set([
+    "authorization_denied",
+    "provider_bad_response"
+]);
+
+const PROFILE_FIELDS = Object.freeze([
+    "userId",
+    "userName",
+    "email"
+]);
+
+function sessionBindings(claims) {
+    return [
+        claims.sessionId,
+        claims.clientId,
+        claims.broker,
+        claims.credentials.appId,
+        claims.expiresAt
+    ];
+}
+
+function normalizeProviderResult(value) {
+    if (!isRecord(value) || !isRecord(value.token)) {
+        throw new ProviderError("provider_bad_response");
+    }
+
+    const sourceToken = value.token;
+
+    if (
+        typeof sourceToken.accessToken !== "string" ||
+        sourceToken.accessToken.length === 0 ||
+        sourceToken.accessToken.length > 16384 ||
+        typeof sourceToken.tokenType !== "string" ||
+        sourceToken.tokenType.length === 0 ||
+        sourceToken.tokenType.length > 32
+    ) {
+        throw new ProviderError("provider_bad_response");
+    }
+
+    const token = {
+        accessToken: sourceToken.accessToken,
+        tokenType: sourceToken.tokenType
+    };
+
+    if (sourceToken.tokenExpiresAt !== undefined) {
+        const expiry = sourceToken.tokenExpiresAt;
+
+        if (typeof expiry !== "string") {
+            throw new ProviderError("provider_bad_response");
+        }
+
+        const date = new Date(expiry);
+
+        if (
+            !Number.isFinite(date.getTime()) ||
+            date.toISOString() !== expiry
+        ) {
+            throw new ProviderError("provider_bad_response");
+        }
+
+        token.tokenExpiresAt = expiry;
+    }
+
+    const result = { token };
+
+    if (value.profile !== undefined) {
+        if (!isRecord(value.profile)) {
+            throw new ProviderError("provider_bad_response");
+        }
+
+        const profile = {};
+
+        for (const field of PROFILE_FIELDS) {
+            const fieldValue = value.profile[field];
+
+            if (fieldValue === undefined) {
+                continue;
+            }
+
+            if (
+                typeof fieldValue !== "string" ||
+                fieldValue.length > 512
+            ) {
+                throw new ProviderError("provider_bad_response");
+            }
+
+            profile[field] = fieldValue;
+        }
+
+        if (Object.keys(profile).length > 0) {
+            result.profile = profile;
+        }
+    }
+
+    return result;
+}
+
+async function failProcessingSession(env, claims, failureCode) {
+    return env.DB.prepare(`
+        UPDATE auth_sessions
+        SET
+            status = 'failed',
+            failure_code = ?
+        WHERE session_id = ?
+          AND corex_client_id = ?
+          AND broker = ?
+          AND provider_app_id = ?
+          AND api_version = 3
+          AND expires_at = ?
+          AND status = 'processing'
+    `).bind(
+        failureCode,
+        ...sessionBindings(claims)
+    ).run();
+}
+
+export async function completeAuthCallback(env, {
+    broker,
+    state,
+    query
+}) {
+    if (!env?.DB) {
+        throw new Error("Database binding is missing.");
+    }
+
+    if (
+        typeof broker !== "string" ||
+        !/^[a-z0-9_-]{2,32}$/.test(broker) ||
+        typeof state !== "string" ||
+        state.length > 4096
+    ) {
+        return "invalid";
+    }
+
+    const provider = getProvider(broker);
+
+    if (!provider) {
+        return "invalid";
+    }
+
+    const claims = await openOAuthState(env, state);
+
+    if (
+        !claims ||
+        claims.broker !== broker ||
+        !isRecord(claims.credentials)
+    ) {
+        return "invalid";
+    }
+
+    const credentials = claims.credentials;
+
+    if (
+        provider.validateCredentials(credentials) ||
+        typeof credentials.appId !== "string"
+    ) {
+        return "invalid";
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const bindings = sessionBindings(claims);
+
+    // Expired state cannot start an exchange.
+    if (claims.expiresAt <= now) {
+        await env.DB.prepare(`
+            UPDATE auth_sessions
+            SET
+                status = 'expired',
+                failure_code = 'session_expired'
+            WHERE session_id = ?
+              AND corex_client_id = ?
+              AND broker = ?
+              AND provider_app_id = ?
+              AND api_version = 3
+              AND expires_at = ?
+              AND status = 'pending'
+        `).bind(...bindings).run();
+
+        return "expired";
+    }
+
+    const callback = provider.parseCallback(query);
+
+    if (!isRecord(callback)) {
+        return "invalid";
+    }
+
+    // The provider has already converted its broker-specific denial
+    // into a CoreX error code.
+    if (callback.error !== undefined) {
+        if (!CALLBACK_FAILURE_CODES.has(callback.error)) {
+            return "invalid";
+        }
+
+        const denied = await env.DB.prepare(`
+            UPDATE auth_sessions
+            SET
+                status = 'failed',
+                callback_received_at = ?,
+                failure_code = ?
+            WHERE session_id = ?
+              AND corex_client_id = ?
+              AND broker = ?
+              AND provider_app_id = ?
+              AND api_version = 3
+              AND expires_at = ?
+              AND expires_at > ?
+              AND status = 'pending'
+              AND EXISTS (
+                  SELECT 1
+                  FROM corex_clients
+                  WHERE corex_client_id = ?
+                    AND status = 'active'
+              )
+        `).bind(
+            now,
+            callback.error,
+            ...bindings,
+            now,
+            claims.clientId
+        ).run();
+
+        return denied.meta?.changes === 1
+            ? "failed"
+            : "invalid";
+    }
+
+    if (
+        typeof callback.code !== "string" ||
+        callback.code.length === 0 ||
+        callback.code.length > 2048
+    ) {
+        return "invalid";
+    }
+
+    // Atomic one-time callback claim. Only the first valid callback
+    // can move a session from pending to processing.
+    const claimed = await env.DB.prepare(`
+        UPDATE auth_sessions
+        SET
+            status = 'processing',
+            callback_received_at = ?
+        WHERE session_id = ?
+          AND corex_client_id = ?
+          AND broker = ?
+          AND provider_app_id = ?
+          AND api_version = 3
+          AND expires_at = ?
+          AND expires_at > ?
+          AND status = 'pending'
+          AND EXISTS (
+              SELECT 1
+              FROM corex_clients
+              WHERE corex_client_id = ?
+                AND status = 'active'
+          )
+    `).bind(
+        now,
+        ...bindings,
+        now,
+        claims.clientId
+    ).run();
+
+    if (claimed.meta?.changes !== 1) {
+        return "invalid";
+    }
+
+    try {
+        const redirectUri = getBrokerRedirectUri(env, broker);
+
+        const providerResult = await provider.exchange({
+            code: callback.code,
+            credentials,
+            redirectUri
+        });
+
+        const result = normalizeProviderResult(providerResult);
+
+        const ciphertext = await sealTokenResult(env, {
+            sessionId: claims.sessionId,
+            broker,
+            result
+        });
+
+        const readyAt = Math.floor(Date.now() / 1000);
+
+        // Keep a ready token available for up to 60 seconds after
+        // its original expiry, without shortening its existing lifetime.
+        const stored = await env.DB.prepare(`
+            UPDATE auth_sessions
+            SET
+                status = 'ready',
+                result_ciphertext = ?,
+                expires_at = MAX(expires_at, ?)
+            WHERE session_id = ?
+              AND corex_client_id = ?
+              AND broker = ?
+              AND provider_app_id = ?
+              AND api_version = 3
+              AND expires_at = ?
+              AND status = 'processing'
+              AND result_ciphertext IS NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM corex_clients
+                  WHERE corex_client_id = ?
+                    AND status = 'active'
+              )
+        `).bind(
+            ciphertext,
+            readyAt + 60,
+            ...bindings,
+            claims.clientId
+        ).run();
+
+        return stored.meta?.changes === 1
+            ? "received"
+            : "invalid";
+    } catch (error) {
+        if (error instanceof ProviderError) {
+            await failProcessingSession(
+                env,
+                claims,
+                error.code
+            );
+
+            return "failed";
+        }
+
+        // Do not expose unexpected errors or broker responses.
+        console.error("Authentication callback processing failed", {
+            errorName: error instanceof Error
+                ? error.name
+                : "UnknownError"
+        });
+
+        await failProcessingSession(
+            env,
+            claims,
+            "authentication_unavailable"
+        );
+
+        return "unavailable";
+    }
 }

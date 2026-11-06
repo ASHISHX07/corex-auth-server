@@ -7,6 +7,7 @@ import {
     apiErrorHandler
 } from "./errors.js";
 import createAuthRouter from "../modules/auth/auth.routes.js";
+import createAuthCallbackRouter from "../modules/auth/callback.routes.js";
 
 export function createApp(env) {
     const app = express();
@@ -53,6 +54,9 @@ export function createApp(env) {
 
     // V3 authentication module.
     app.use("/api/v3/auth", createAuthRouter(env));
+
+    // Public broker callbacks and authorization status page.
+    app.use("/auth", createAuthCallbackRouter(env));
 
     app.use(notFoundHandler);
     app.use(apiErrorHandler);
