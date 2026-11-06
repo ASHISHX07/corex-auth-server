@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+
+  "name": "corex-server-v3",
+  "main": "main.js",
+
+  "compatibility_date": "2026-11-06",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+
+  "workers_dev": true
+}
