@@ -72,6 +72,14 @@ export default function createAuthRouter(env) {
             });
 
             if (result.error) {
+                if (result.httpStatus === 409) {
+                    return res.status(409).json({
+                        status: "failed",
+                        error: result.error,
+                        message: ERROR_MESSAGES[result.error]
+                    });
+                }
+            
                 return sendApiError(
                     res,
                     result.httpStatus,
