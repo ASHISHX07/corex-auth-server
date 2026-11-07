@@ -111,6 +111,8 @@ async function exchange({
 
     let response;
 
+    const startedAt = Date.now();
+
     try {
         response = await fetch(TOKEN_URL, {
             redirect: "error",
@@ -128,7 +130,28 @@ async function exchange({
             }),
             signal: AbortSignal.timeout(EXCHANGE_TIMEOUT_MS)
         });
-    } catch {
+    } catch (error) {
+        const errorName =
+            error instanceof Error ? error.name : "UnknownError";
+    
+        const errorMessage =
+            error instanceof Error
+                ? error.message.toLowerCase()
+                : "";
+    
+        const failureType =
+            errorName === "TimeoutError" || errorName === "AbortError"
+                ? "timeout"
+                : errorMessage.includes("redirect")
+                    ? "redirect_rejected"
+                    : "network_or_fetch_error";
+    
+        console.error("Upstox token exchange fetch failed", {
+            failureType,
+            errorName,
+            elapsedMs: Date.now() - startedAt
+        });
+    
         throw new ProviderError("provider_unreachable");
     }
 
