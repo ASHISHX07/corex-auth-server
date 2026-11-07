@@ -86,6 +86,8 @@ test("Upstox exchanges the authorization code and normalizes the result", async 
             JSON.stringify(result).includes("DO-NOT-RETURN"),
             false
         );
+
+        assert.equal(request.options.redirect, "manual");
     });
 });
 
@@ -159,6 +161,26 @@ test("Upstox response without access token is rejected", async () => {
     await withMockFetch(async () => {
         return Response.json({
             user_id: "USER-123"
+        });
+    }, async () => {
+        await assert.rejects(
+            provider.exchange({
+                code: "AUTH-CODE",
+                credentials,
+                redirectUri
+            }),
+            error => error.code === "provider_bad_response"
+        );
+    });
+});
+
+test("Upstox rejects unexpected redirects without following them", async () => {
+    await withMockFetch(async () => {
+        return new Response(null, {
+            status: 302,
+            headers: {
+                Location: "https://example.com/token"
+            }
         });
     }, async () => {
         await assert.rejects(

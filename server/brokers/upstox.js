@@ -115,7 +115,7 @@ async function exchange({
 
     try {
         response = await fetch(TOKEN_URL, {
-            redirect: "error",
+            redirect: "manual",
             method: "POST",
             headers: {
                 Accept: "application/json",
@@ -151,8 +151,30 @@ async function exchange({
             errorName,
             elapsedMs: Date.now() - startedAt
         });
-    
+
         throw new ProviderError("provider_unreachable");
+    }
+
+    // Never automatically follow token endpoint redirects.
+    if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+
+        let redirectHost = null;
+
+        if (location) {
+            try {
+                redirectHost = new URL(location, TOKEN_URL).hostname;
+            } catch {
+                // Ignore malformed redirect destinations.
+            }
+        }
+
+        console.error("Upstox token exchange returned unexpected redirect", {
+            status: response.status,
+            redirectHost
+        });
+
+        throw new ProviderError("provider_bad_response");
     }
 
     if (!response.ok) {
