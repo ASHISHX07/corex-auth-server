@@ -1,19 +1,40 @@
 import { Router } from "express";
+
 import { rateLimit } from "../../gateway/rate-limits.js";
 import { completeAuthCallback } from "./auth.service.js";
+import { BROKER_IDS } from "../../brokers/registry.js";
 
-const STATUS_MESSAGES = Object.freeze({
-    received:
-        "Authorization was received successfully. You can return to CoreX.",
-    failed:
-        "Broker authorization could not be completed. Start a new session in CoreX.",
-    invalid:
-        "This authorization link is invalid or has already been used.",
-    expired:
-        "This authentication session has expired. Start a new session in CoreX.",
-    unavailable:
-        "Authentication is temporarily unavailable. Try again from CoreX."
-});
+const ALLOWED_STATUSES = new Set([
+    "received",
+    "failed",
+    "invalid",
+    "unavailable",
+    "expired"
+]);
+
+function normalizeStatus(value) {
+    if (typeof value !== "string") {
+        return "invalid";
+    }
+
+    const status = value.trim().toLowerCase();
+
+    return ALLOWED_STATUSES.has(status)
+        ? status
+        : "invalid";
+}
+
+function normalizeBroker(value) {
+    if (typeof value !== "string") {
+        return "corex";
+    }
+
+    const broker = value.trim().toLowerCase();
+
+    return BROKER_IDS.includes(broker)
+        ? broker
+        : "corex";
+}
 
 function setBrowserSecurityHeaders(res) {
     res.set({
@@ -21,69 +42,110 @@ function setBrowserSecurityHeaders(res) {
         "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Permissions-Policy":
+            "camera=(), microphone=(), geolocation=()",
         "Content-Security-Policy":
             "default-src 'none'; " +
+            "script-src 'self'; " +
+            "style-src 'self'; " +
+            "img-src 'self'; " +
+            "font-src 'self'; " +
+            "connect-src 'none'; " +
+            "object-src 'none'; " +
             "base-uri 'none'; " +
             "form-action 'none'; " +
             "frame-ancestors 'none'"
     });
 }
 
-function redirectToStatus(res, status) {
-    const safeStatus = Object.hasOwn(STATUS_MESSAGES, status)
-        ? status
-        : "invalid";
+function redirectToStatus(res, broker, status) {
+    const params = new URLSearchParams({
+        broker: normalizeBroker(broker),
+        status: normalizeStatus(status)
+    });
 
     setBrowserSecurityHeaders(res);
 
     return res.redirect(
         303,
-        `/auth/response?status=${safeStatus}`
+        `/auth/response?${params.toString()}`
     );
+}
+
+async function sendAuthResponsePage(env, req, res, {
+    broker,
+    status
+}) {
+    if (typeof env?.ASSETS?.fetch !== "function") {
+        return res
+            .status(503)
+            .type("text")
+            .send("CoreX authorization page is unavailable.");
+    }
+
+    try {
+        const assetResponse = await env.ASSETS.fetch(
+            new Request("https://assets.local/auth-response.html")
+        );
+
+        if (!assetResponse.ok) {
+            throw new Error("Authorization page asset unavailable.");
+        }
+
+        let html = await assetResponse.text();
+
+        // Values are normalized against fixed allowlists before insertion.
+        html = html
+            .replaceAll("__COREX_BROKER__", broker)
+            .replaceAll("__COREX_STATUS__", status);
+
+        return res
+            .status(200)
+            .type("html")
+            .send(html);
+    } catch (error) {
+        console.error("Authorization response page failed", {
+            requestId: req.requestId,
+            errorName: error instanceof Error
+                ? error.name
+                : "UnknownError"
+        });
+
+        return res
+            .status(503)
+            .type("text")
+            .send("CoreX authorization page is temporarily unavailable.");
+    }
 }
 
 export default function createAuthCallbackRouter(env) {
     const router = Router();
 
-    // Public, human-readable result page.
-    router.get("/response", (req, res) => {
+    // Generic public authorization status page.
+    router.get("/response", async (req, res) => {
         setBrowserSecurityHeaders(res);
 
-        const status = typeof req.query.status === "string"
-            ? req.query.status
-            : "invalid";
-
-        const message = STATUS_MESSAGES[status] ??
-            STATUS_MESSAGES.invalid;
-
-        return res
-            .status(200)
-            .type("html")
-            .send(`<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>CoreX Authorization</title>
-</head>
-<body>
-    <main>
-        <h1>CoreX Authorization</h1>
-        <p>${message}</p>
-    </main>
-</body>
-</html>`);
+        return sendAuthResponsePage(env, req, res, {
+            broker: normalizeBroker(req.query.broker),
+            status: normalizeStatus(req.query.status)
+        });
     });
 
     // Public broker redirect target.
-    router.get("/:broker/callback",
-        rateLimit(env, "CALLBACK_LIMITER",
+    router.get(
+        "/:broker/callback",
+
+        rateLimit(
+            env,
+            "CALLBACK_LIMITER",
             req => {
                 const ip = req.get("cf-connecting-ip") || "unknown";
+
                 return `${req.params.broker}:${ip}`;
             }
         ),
-        
+
         async (req, res) => {
             let status = "unavailable";
 
@@ -104,8 +166,13 @@ export default function createAuthCallbackRouter(env) {
                 });
             }
 
-        return redirectToStatus(res, status);
-        });
+            return redirectToStatus(
+                res,
+                req.params.broker,
+                status
+            );
+        }
+    );
 
     return router;
 }

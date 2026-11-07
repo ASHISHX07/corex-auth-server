@@ -515,6 +515,27 @@ test("callback exchanges the code and stores a normalized encrypted result", asy
                 );
 
                 assert.equal(response.status, 303);
+
+                const responseLocation = new URL(
+                    response.headers.get("location"),
+                    baseUrl
+                );
+                
+                assert.equal(
+                    responseLocation.pathname,
+                    "/auth/response"
+                );
+                
+                assert.equal(
+                    responseLocation.searchParams.get("broker"),
+                    "upstox"
+                );
+                
+                assert.equal(
+                    responseLocation.searchParams.get("status"),
+                    "received"
+                );
+
                 assert.equal(
                     callbackStatus(response, baseUrl),
                     "received"

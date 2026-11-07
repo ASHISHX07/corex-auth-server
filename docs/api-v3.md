@@ -77,17 +77,32 @@ The provider exchanges the authorization code and returns a normalized token/pro
 
 The browser is redirected to:
 
-GET /auth/response?status={status}
+GET /auth/response?broker={broker}&status={status}
+
+This is a shared, public, static authorization-status page.
+
+The page receives only allowlisted broker and status identifiers. It
+never displays authorization codes, OAuth state, application secrets,
+access tokens or session credentials.
+
+The presentation is handled by separate static HTML, CSS and JavaScript
+assets. The callback service remains independent of the page's layout.
+
+Possible outcomes:
+
+- received: callback processing succeeded and an encrypted result is ready
+  for the CoreX client to retrieve.
+- failed: broker authorization or token exchange failed.
+- invalid: callback state or session could not be validated.
+- expired: the authorization session expired.
+- unavailable: authorization processing could not be completed because
+  of a temporary service problem.
+
+The `received` browser state does not mean the CoreX client has retrieved
+the token. The client must still retrieve the authentication result through
+the protected session-result endpoint.
 
 The human-facing status page does not contain tokens or authorization codes.
-
-Possible statuses:
-
-- received
-- failed
-- invalid
-- expired
-- unavailable
 
 ## 5. Retrieve the authentication result
 
