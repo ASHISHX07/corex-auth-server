@@ -381,6 +381,23 @@
         </form>
     </dialog>
 
+    <!-- Client details -->
+    <dialog id="client-dialog">
+        <form method="dialog" class="dialog-card">
+            <div class="dialog-heading">
+                <div>
+                    <p class="eyebrow">COREX CLIENT</p>
+                    <h2>Client details</h2>
+                </div>
+                <button class="icon-close" value="close" aria-label="Close">
+                    ×
+                </button>
+            </div>
+
+            <dl id="client-details" class="details-list"></dl>
+        </form>
+    </dialog>
+
     <!-- Session details -->
     <dialog id="session-dialog">
         <form method="dialog" class="dialog-card">
@@ -389,24 +406,14 @@
                     <p class="eyebrow">AUTHENTICATION SESSION</p>
                     <h2>Session details</h2>
                 </div>
-                <button class="icon-close" value="close" aria-label="Close">×</button>
+                <button class="icon-close" value="close" aria-label="Close">
+                    ×
+                </button>
             </div>
-            <dialog id="client-dialog">
-                <form method="dialog" class="dialog-card">
-                    <div class="dialog-heading">
-                        <div>
-                            <p class="eyebrow">COREX CLIENT</p>
-                            <h2>Client details</h2>
-                        </div>
-                        <button class="icon-close" value="close" aria-label="Close">×</button>
-                    </div>
-            
-                    <dl id="client-details" class="details-list"></dl>
-                </form>
-            </dialog>
+
             <dl id="session-details" class="details-list"></dl>
         </form>
-    </dialog>
+</dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
