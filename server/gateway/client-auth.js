@@ -2,7 +2,7 @@ import { sha256Hex } from "../security/hashing.js";
 import { sendApiError } from "./errors.js";
 
 const CLIENT_KEY_PATTERN =
-    /^Bearer (cx_[A-Za-z0-9_-]{43})$/;
+    /^Bearer (cx_[A-Za-z0-9_-]{43})$/i
 
 const SCOPE_PATTERN =
     /^[a-z][a-z0-9:_-]{0,63}$/;

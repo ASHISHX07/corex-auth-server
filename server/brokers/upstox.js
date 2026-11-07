@@ -113,6 +113,7 @@ async function exchange({
 
     try {
         response = await fetch(TOKEN_URL, {
+            redirect: "error",
             method: "POST",
             headers: {
                 Accept: "application/json",
