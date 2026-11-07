@@ -9,6 +9,52 @@ import {
 import createAuthRouter from "../modules/auth/auth.routes.js";
 import createAuthCallbackRouter from "../modules/auth/callback.routes.js";
 import createAdminRouter from "../admin/admin.routes.js";
+import {
+    readAdminSessionCookie,
+    verifyAdminSessionToken
+} from "../security/admin-session.js";
+
+function setAdminPageSecurityHeaders(res) {
+    res.set({
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Security-Policy":
+            "default-src 'self'; " +
+            "script-src 'self'; " +
+            "style-src 'self'; " +
+            "img-src 'self' data:; " +
+            "connect-src 'self'; " +
+            "font-src 'self'; " +
+            "object-src 'none'; " +
+            "base-uri 'self'; " +
+            "frame-ancestors 'none'; " +
+            "form-action 'self'"
+    });
+}
+
+async function sendAdminHtml(env, filename, res) {
+    if (typeof env?.ASSETS?.fetch !== "function") {
+        return res.status(503).type("text").send(
+            "Static assets are not configured."
+        );
+    }
+
+    const response = await env.ASSETS.fetch(
+        new Request(`https://assets.local/${filename}`)
+    );
+
+    if (!response.ok) {
+        return res.status(404).type("text").send("Page not found.");
+    }
+
+    return res
+        .status(response.status)
+        .type("html")
+        .send(await response.text());
+}
 
 export function createApp(env, waitUntil) {
     const app = express();
@@ -64,8 +110,62 @@ export function createApp(env, waitUntil) {
     // Private administrator module.
     app.use("/api/v3/admin", createAdminRouter(env));
 
+    // Protected administrator pages.
+    app.get(
+        ["/", "/index.html", "/dashboard.html"],
+        async (req, res) => {
+            setAdminPageSecurityHeaders(res);
+
+            try {
+                const token = readAdminSessionCookie(req);
+
+                const claims = token
+                    ? await verifyAdminSessionToken(env, token)
+                    : null;
+
+                if (!claims) {
+                    return res.redirect(303, "/login.html");
+                }
+
+                return await sendAdminHtml(env, "index.html", res);
+            } catch {
+                console.error("Dashboard access failed", {
+                    requestId: req.requestId
+                });
+
+                return res.status(503).type("text").send(
+                    "Dashboard authentication is temporarily unavailable."
+                );
+            }
+        }
+    );
+
+    // Login page redirects already-authenticated administrators.
+    app.get("/login.html", async (req, res) => {
+        setAdminPageSecurityHeaders(res);
+
+        try {
+            const token = readAdminSessionCookie(req);
+
+            const claims = token
+                ? await verifyAdminSessionToken(env, token)
+                : null;
+
+            if (claims) {
+                return res.redirect(303, "/");
+            }
+
+            return await sendAdminHtml(env, "login.html", res);
+        } catch {
+            return res.status(503).type("text").send(
+                "Login is temporarily unavailable."
+            );
+        }
+    });
+
     app.use(notFoundHandler);
     app.use(apiErrorHandler);
 
     return app;
 }
+

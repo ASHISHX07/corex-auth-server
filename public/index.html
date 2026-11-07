@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+
+    <title>CoreX · Admin Console</title>
+
+    <link rel="icon" href="/assets/logo.png">
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+</head>
+<body>
+    <aside class="sidebar">
+        <a class="brand" href="/">
+            <img src="/assets/logo.png" alt="CoreX">
+            <span>
+                <strong>CoreX</strong>
+                <small>AUTH SERVER</small>
+            </span>
+        </a>
+
+        <p class="nav-label">ADMINISTRATION</p>
+
+        <nav>
+            <button class="nav-link active" data-view-target="overview">
+                Overview
+            </button>
+            <button class="nav-link" data-view-target="requests">
+                Requests
+            </button>
+            <button class="nav-link" data-view-target="clients">
+                Clients
+            </button>
+            <button class="nav-link" data-view-target="sessions">
+                Sessions
+            </button>
+            <button class="nav-link" data-view-target="audit">
+                Audit history
+            </button>
+        </nav>
+
+        <div class="sidebar-footer">
+            <span class="online-dot"></span>
+            Private administrator console
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">COREX CONTROL PLANE</p>
+                <h1 id="page-title">Overview</h1>
+            </div>
+
+            <div class="topbar-actions">
+                <select id="period-select" aria-label="Dashboard period">
+                    <option value="24h">Last 24 hours</option>
+                    <option value="7d">Last 7 days</option>
+                    <option value="30d">Last 30 days</option>
+                </select>
+
+                <button class="button secondary" id="refresh-button">
+                    Refresh
+                </button>
+
+                <span class="admin-name" id="admin-name">Administrator</span>
+
+                <button class="button secondary" id="logout-button">
+                    Sign out
+                </button>
+            </div>
+        </header>
+
+        <div class="content">
+            <!-- OVERVIEW -->
+            <section class="view active" id="view-overview">
+                <div class="metrics-grid">
+                    <article class="metric-card">
+                        <span>Total requests</span>
+                        <strong id="request-total">—</strong>
+                        <small>Selected period</small>
+                    </article>
+
+                    <article class="metric-card">
+                        <span>Request success rate</span>
+                        <strong id="request-success-rate">—</strong>
+                        <small id="request-success-count">—</small>
+                    </article>
+
+                    <article class="metric-card">
+                        <span>Active clients</span>
+                        <strong id="active-clients">—</strong>
+                        <small id="total-clients">—</small>
+                    </article>
+
+                    <article class="metric-card">
+                        <span>Authentication sessions</span>
+                        <strong id="session-total">—</strong>
+                        <small id="active-sessions">—</small>
+                    </article>
+
+                    <article class="metric-card">
+                        <span>Requests today</span>
+                        <strong id="requests-today">—</strong>
+                        <small>Logged requests</small>
+                    </article>
+                </div>
+
+                <div class="panel-grid">
+                    <article class="panel">
+                        <div class="panel-heading">
+                            <div>
+                                <h2>Broker performance</h2>
+                                <p>Successful exchanges versus failed exchanges</p>
+                            </div>
+                        </div>
+                        <div id="broker-stats" class="data-list">
+                            <p class="muted">Loading…</p>
+                        </div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-heading">
+                            <div>
+                                <h2>Failure reasons</h2>
+                                <p>Failed authentication sessions</p>
+                            </div>
+                        </div>
+                        <div id="failure-reasons" class="data-list">
+                            <p class="muted">Loading…</p>
+                        </div>
+                    </article>
+                </div>
+
+                <article class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Session status</h2>
+                            <p>Authentication lifecycle breakdown</p>
+                        </div>
+                        <button class="text-button" data-go-view="sessions">
+                            View sessions →
+                        </button>
+                    </div>
+                    <div id="session-breakdown" class="status-grid"></div>
+                </article>
+            </section>
+
+            <!-- REQUESTS -->
+            <section class="view" id="view-requests">
+                <div class="section-heading">
+                    <div>
+                        <h2>Request history</h2>
+                        <p>Metadata only. Pending result polls are excluded.</p>
+                    </div>
+                </div>
+
+                <div class="toolbar">
+                    <input
+                        id="request-search"
+                        type="search"
+                        placeholder="Search path, client or request ID"
+                    >
+
+                    <select id="request-status-filter">
+                        <option value="">All statuses</option>
+                        <option value="2xx">Successful</option>
+                        <option value="4xx">Client errors</option>
+                        <option value="5xx">Server errors</option>
+                    </select>
+
+                    <input
+                        id="request-broker-filter"
+                        type="search"
+                        placeholder="Broker ID"
+                    >
+                </div>
+
+                <article class="panel table-panel">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Method</th>
+                                    <th>Path</th>
+                                    <th>Status</th>
+                                    <th>Duration</th>
+                                    <th>Client</th>
+                                    <th>Broker</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requests-body">
+                                <tr><td colspan="7" class="empty">Loading…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="table-footer">
+                        <span id="request-count">—</span>
+                        <button class="button secondary" id="load-more-requests" hidden>
+                            Load more
+                        </button>
+                    </div>
+                </article>
+            </section>
+
+            <!-- CLIENTS -->
+            <section class="view" id="view-clients">
+                <div class="section-heading">
+                    <div>
+                        <h2>CoreX clients</h2>
+                        <p>Manage installations authorized to use CoreX services.</p>
+                    </div>
+                </div>
+
+                <article class="panel create-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Create client</h2>
+                            <p>The generated API key is displayed only once.</p>
+                        </div>
+                    </div>
+
+                    <form id="create-client-form" class="create-form">
+                        <input
+                            id="client-display-name"
+                            name="displayName"
+                            maxlength="80"
+                            placeholder="Client name, e.g. CoreX Desktop"
+                            required
+                        >
+                        <button class="button primary" type="submit">
+                            Create client
+                        </button>
+                    </form>
+                </article>
+
+                <article class="panel table-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Registered clients</h2>
+                            <p id="client-count">Loading…</p>
+                        </div>
+                        <input id="client-search" type="search" placeholder="Search clients">
+                    </div>
+
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Client</th>
+                                    <th>Key hint</th>
+                                    <th>Scopes</th>
+                                    <th>Status</th>
+                                    <th>Sessions</th>
+                                    <th>Last seen</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clients-body">
+                                <tr><td colspan="7" class="empty">Loading…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+
+            <!-- SESSIONS -->
+            <section class="view" id="view-sessions">
+                <div class="section-heading">
+                    <div>
+                        <h2>Authentication sessions</h2>
+                        <p>Inspect broker authorization and token-exchange activity.</p>
+                    </div>
+                </div>
+
+                <div class="toolbar">
+                    <select id="session-status-filter">
+                        <option value="">All statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="processing">Processing</option>
+                        <option value="ready">Ready</option>
+                        <option value="retrieved">Retrieved</option>
+                        <option value="failed">Failed</option>
+                        <option value="expired">Expired</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="code_received">Code received (legacy)</option>
+                    </select>
+
+                    <input
+                        id="session-broker-filter"
+                        type="search"
+                        placeholder="Broker ID"
+                    >
+
+                    <select id="session-version-filter">
+                        <option value="">All API versions</option>
+                        <option value="3">V3</option>
+                        <option value="2">V2</option>
+                        <option value="1">V1</option>
+                    </select>
+                </div>
+
+                <article class="panel table-panel">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Session</th>
+                                    <th>Client</th>
+                                    <th>Broker</th>
+                                    <th>API</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sessions-body">
+                                <tr><td colspan="7" class="empty">Loading…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+
+            <!-- AUDIT -->
+            <section class="view" id="view-audit">
+                <div class="section-heading">
+                    <div>
+                        <h2>Administrative audit</h2>
+                        <p>Recorded changes made by the two administrators.</p>
+                    </div>
+                </div>
+
+                <article class="panel table-panel">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Administrator</th>
+                                    <th>Action</th>
+                                    <th>Target type</th>
+                                    <th>Target ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-body">
+                                <tr><td colspan="5" class="empty">Loading…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+        </div>
+    </main>
+
+    <!-- One-time API key display -->
+    <dialog id="api-key-dialog">
+        <form method="dialog" class="dialog-card">
+            <p class="eyebrow">CLIENT CREATED</p>
+            <h2>Copy your API key</h2>
+            <p class="warning-text">
+                This key is shown only once. Store it securely.
+                CoreX Server cannot display it again.
+            </p>
+
+            <label for="new-api-key">Client API key</label>
+            <div class="key-row">
+                <input id="new-api-key" readonly>
+                <button class="button secondary" id="copy-api-key" type="button">
+                    Copy
+                </button>
+            </div>
+
+            <button class="button primary full-width" value="close">
+                I've saved the key
+            </button>
+        </form>
+    </dialog>
+
+    <!-- Session details -->
+    <dialog id="session-dialog">
+        <form method="dialog" class="dialog-card">
+            <div class="dialog-heading">
+                <div>
+                    <p class="eyebrow">AUTHENTICATION SESSION</p>
+                    <h2>Session details</h2>
+                </div>
+                <button class="icon-close" value="close" aria-label="Close">×</button>
+            </div>
+            <dialog id="client-dialog">
+                <form method="dialog" class="dialog-card">
+                    <div class="dialog-heading">
+                        <div>
+                            <p class="eyebrow">COREX CLIENT</p>
+                            <h2>Client details</h2>
+                        </div>
+                        <button class="icon-close" value="close" aria-label="Close">×</button>
+                    </div>
+            
+                    <dl id="client-details" class="details-list"></dl>
+                </form>
+            </dialog>
+            <dl id="session-details" class="details-list"></dl>
+        </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
