@@ -26,7 +26,12 @@ import {
     getCorexClient,
     updateCorexClientScopes,
     revokeCorexClient,
-    getAdminAudit
+    getAdminAudit,
+    getAdminOverview,
+    getAdminRequests,
+    getAdminSessions,
+    getAdminSession,
+    invalidateAdminSession
 } from "./admin.service.js";
 
 const ERROR_MESSAGES = {
@@ -36,7 +41,10 @@ const ERROR_MESSAGES = {
     client_not_found: "The requested CoreX client was not found.",
     invalid_client_id: "The client ID is invalid.",
     invalid_scopes: "The requested client scopes are invalid.",
-    admin_operation_failed: "The administrator operation failed."
+    admin_operation_failed: "The administrator operation failed.",
+    session_not_found: "The requested authentication session was not found.",
+    session_not_active: "The authentication session is no longer active.",
+    invalid_session_filter: "One or more session filters are invalid.",
 };
 
 function validId(value) {
@@ -165,6 +173,8 @@ export default function createAdminRouter(env) {
 
         return next();
     });
+
+
 
     router.get("/me", (req, res) => {
         return res.json({
@@ -361,6 +371,155 @@ export default function createAdminRouter(env) {
                     req,
                     "client.revoke"
                 );
+            }
+        }
+    );
+
+    // Dashboard metrics and summaries.
+    router.get("/overview", async (req, res) => {
+        try {
+            const overview = await getAdminOverview(env, {
+                period: req.query.period
+            });
+
+            return res.json(overview);
+        } catch (error) {
+            if (error instanceof TypeError) {
+                return sendApiError(
+                    res,
+                    400,
+                    "invalid_request",
+                    "The requested dashboard period is invalid.",
+                    "period"
+                );
+            }
+
+            return sendInternalError(res, req, "dashboard.overview");
+        }
+    });
+
+    // Metadata-only request history.
+    router.get("/requests", async (req, res) => {
+        try {
+            const result = await getAdminRequests(env, {
+                period: req.query.period,
+                limit: req.query.limit,
+                offset: req.query.offset
+            });
+
+            return res.json(result);
+        } catch (error) {
+            if (error instanceof TypeError) {
+                return sendApiError(
+                    res,
+                    400,
+                    "invalid_request",
+                    "The requested request-history filters are invalid."
+                );
+            }
+
+            return sendInternalError(res, req, "dashboard.requests");
+        }
+    });
+
+    // Session list with optional status, broker and API-version filters.
+    router.get("/sessions", async (req, res) => {
+        try {
+            const items = await getAdminSessions(env, {
+                limit: req.query.limit,
+                status: req.query.status,
+                broker: req.query.broker,
+                apiVersion: req.query.apiVersion
+            });
+
+            return res.json({ items });
+        } catch (error) {
+            if (error instanceof TypeError) {
+                return sendApiError(
+                    res,
+                    400,
+                    "invalid_session_filter",
+                    ERROR_MESSAGES.invalid_session_filter
+                );
+            }
+
+            return sendInternalError(res, req, "dashboard.sessions");
+        }
+    });
+
+    // Session details never include credentials, authorization codes or ciphertext.
+    router.get("/sessions/:sessionId", async (req, res) => {
+        if (!validId(req.params.sessionId)) {
+            return sendApiError(
+                res,
+                400,
+                "invalid_request",
+                "The session ID is invalid."
+            );
+        }
+
+        try {
+            const session = await getAdminSession(
+                env,
+                req.params.sessionId
+            );
+
+            if (!session) {
+                return sendApiError(
+                    res,
+                    404,
+                    "session_not_found",
+                    ERROR_MESSAGES.session_not_found
+                );
+            }
+
+            return res.json(session);
+        } catch {
+            return sendInternalError(res, req, "session.inspect");
+        }
+    });
+
+    // Cancel an unfinished V3 session and audit the operation.
+    router.post(
+        "/sessions/:sessionId/invalidate",
+        async (req, res) => {
+            if (!validId(req.params.sessionId)) {
+                return sendApiError(
+                    res,
+                    400,
+                    "invalid_request",
+                    "The session ID is invalid."
+                );
+            }
+
+            try {
+                const result = await invalidateAdminSession(
+                    env,
+                    req.params.sessionId,
+                    req.adminUser
+                );
+
+                if (!result) {
+                    return sendApiError(
+                        res,
+                        404,
+                        "session_not_found",
+                        ERROR_MESSAGES.session_not_found
+                    );
+                }
+
+                if (!result.invalidated) {
+                    return sendApiError(
+                        res,
+                        409,
+                        "session_not_active",
+                        ERROR_MESSAGES.session_not_active
+                    );
+                }
+
+                return res.json(result);
+            } catch {
+                return sendInternalError(res, req, "session.invalidate");
             }
         }
     );
