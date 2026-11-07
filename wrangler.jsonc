@@ -52,6 +52,14 @@
                 "limit": 5,
                 "period": 60
             }
+        },
+        {
+            "name": "ADMIN_CLIENT_CREATE_LIMITER",
+            "namespace_id": "68420105",
+            "simple": {
+                "limit": 5,
+                "period": 60
+            }
         }
     ],
 
