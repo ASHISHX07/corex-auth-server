@@ -1,0 +1,199 @@
+{
+  "info": {
+    "_postman_id": "4f7c6cb8-ec10-4c7d-9e9f-7f6b6f4b2a31",
+    "name": "CoreX Auth Server V3",
+    "description": "Manual end-to-end Upstox authorization-code flow through CoreX Auth Server V3. Create a session in Postman, open the returned authorizationUrl in a normal browser, complete Upstox login, then retrieve the result in Postman. Never share this collection with real credentials or token responses.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "serverUrl",
+      "value": "https://REPLACE-WITH-STAGING-WORKER.workers.dev",
+      "type": "string"
+    },
+    {
+      "key": "broker",
+      "value": "upstox",
+      "type": "string"
+    },
+    {
+      "key": "clientKey",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "appId",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "appSecret",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "sessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authorizationUrl",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "sessionExpiresAt",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health check",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{serverUrl}}/api/health",
+        "description": "Checks that the staging Worker responds. No credentials required."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Health endpoint returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Health response is JSON and healthy', function () { pm.expect(pm.response.json().status).to.eql('ok'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Create Upstox session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{clientKey}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"broker\": \"{{broker}}\",\n  \"credentials\": {\n    \"appId\": \"{{appId}}\",\n    \"appSecret\": \"{{appSecret}}\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{serverUrl}}/api/v3/auth/sessions",
+        "description": "Creates a five-minute server-side session. On 201 the test script saves sessionId, authorizationUrl and sessionExpiresAt into the active Postman environment. Open authorizationUrl in a normal browser; do not send that URL as a Postman request. The URL contains sealed OAuth state and must not be shared."
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "['serverUrl', 'clientKey', 'appId', 'appSecret'].forEach(function (name) {",
+              "  if (!pm.environment.get(name)) { throw new Error('Set the Postman environment variable: ' + name); }",
+              "});",
+              "if ((pm.environment.get('broker') || 'upstox') !== 'upstox') { throw new Error('This collection flow is currently configured for the upstox provider.'); }"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Session creation returns 201', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.sessionId).to.be.a('string').and.not.empty;",
+              "  pm.expect(data.authorizationUrl).to.be.a('string').and.not.empty;",
+              "  pm.environment.set('sessionId', data.sessionId);",
+              "  pm.environment.set('authorizationUrl', data.authorizationUrl);",
+              "  pm.environment.set('sessionExpiresAt', data.sessionExpiresAt);",
+              "  console.info('Session created. Open the authorizationUrl environment value in your normal browser. Do not share it.');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Retrieve authentication result",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{clientKey}}",
+            "type": "text"
+          }
+        ],
+        "url": "{{serverUrl}}/api/v3/auth/sessions/{{sessionId}}/result",
+        "description": "Call after the browser has redirected to the CoreX callback and shown the received status. If this returns 202, wait for Retry-After (normally 3 seconds) and send again. On 200, the token is returned exactly once. Postman may retain response history; use a private/local workspace and clear the response after testing."
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!pm.environment.get('clientKey')) { throw new Error('Set the Postman environment variable: clientKey'); }",
+              "if (!pm.environment.get('sessionId')) { throw new Error('Create a session first.'); }"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 202) {",
+              "  pm.test('Session is still pending', function () { pm.expect(pm.response.json().status).to.eql('pending'); });",
+              "  console.info('Still pending. Wait ' + (pm.response.headers.get('Retry-After') || '3') + ' seconds, then send this request again.');",
+              "} else if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  pm.test('Authentication completed', function () {",
+              "    pm.expect(data.status).to.eql('completed');",
+              "    pm.expect(data.broker).to.eql('upstox');",
+              "    pm.expect(data.token.accessToken).to.be.a('string').and.not.empty;",
+              "    pm.expect(data.token.tokenType).to.be.a('string').and.not.empty;",
+              "  });",
+              "  console.warn('Token returned once. Do not save or share this response, screenshots, or Postman history.');",
+              "} else if (pm.response.code === 409) {",
+              "  const data = pm.response.json();",
+              "  pm.test('Authentication failed at the provider', function () { pm.expect(data.status).to.eql('failed'); });",
+              "} else {",
+              "  pm.test('Unexpected result response: ' + pm.response.code, function () { pm.expect(pm.response.code).to.be.oneOf([200, 202, 409, 410]); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
