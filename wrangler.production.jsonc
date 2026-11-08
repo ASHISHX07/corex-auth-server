@@ -33,27 +33,27 @@
     "ratelimits": [
         {
             "name": "AUTH_SESSION_LIMITER",
-            "namespace_id": "68421101",
+            "namespace_id": "68422101",
             "simple": { "limit": 10, "period": 60 }
         },
         {
             "name": "AUTH_POLL_LIMITER",
-            "namespace_id": "68421104",
+            "namespace_id": "68422104",
             "simple": { "limit": 120, "period": 60 }
         },
         {
             "name": "CALLBACK_LIMITER",
-            "namespace_id": "68421102",
+            "namespace_id": "68422102",
             "simple": { "limit": 120, "period": 60 }
         },
         {
             "name": "ADMIN_LOGIN_LIMITER",
-            "namespace_id": "68421103",
+            "namespace_id": "68422103",
             "simple": { "limit": 5, "period": 60 }
         },
         {
             "name": "ADMIN_CLIENT_CREATE_LIMITER",
-            "namespace_id": "68421105",
+            "namespace_id": "68422105",
             "simple": { "limit": 5, "period": 60 }
         }
     ],
