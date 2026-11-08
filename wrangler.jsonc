@@ -1,82 +1,63 @@
 {
-	"$schema": "./node_modules/wrangler/config-schema.json",
-	"name": "corex-server-v3",
-	"main": "main.js",
-	"compatibility_date": "2026-11-06",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
-	"workers_dev": true,
-	"assets": {
-		"directory": "./public",
-		"binding": "ASSETS",
-		"run_worker_first": [
-			"/",
-			"/index.html",
-			"/dashboard.html",
-			"/login.html",
-			"/api/*",
-			"/auth/*"
-		]
-	},
-	"d1_databases": [
-		{
-			"binding": "DB",
-			"database_name": "corex-db",
-			"database_id": "95587b10-6f24-43be-acd8-71869a4fa55d",
-			"migrations_dir": "db/migrations"
-		},
-		{
-			"binding": "Y",
-			"database_name": "corex-db-staging",
-			"database_id": "7d6b918f-6d05-4e2c-a200-8a9682e89bd6"
-		}
-	],
-	"ratelimits": [
-		{
-			"name": "AUTH_SESSION_LIMITER",
-			"namespace_id": "68420101",
-			"simple": {
-				"limit": 10,
-				"period": 60
-			}
-		},
-		{
-			"name": "AUTH_POLL_LIMITER",
-			"namespace_id": "68420104",
-			"simple": {
-				"limit": 120,
-				"period": 60
-			}
-		},
-		{
-			"name": "CALLBACK_LIMITER",
-			"namespace_id": "68420102",
-			"simple": {
-				"limit": 120,
-				"period": 60
-			}
-		},
-		{
-			"name": "ADMIN_LOGIN_LIMITER",
-			"namespace_id": "68420103",
-			"simple": {
-				"limit": 5,
-				"period": 60
-			}
-		},
-		{
-			"name": "ADMIN_CLIENT_CREATE_LIMITER",
-			"namespace_id": "68420105",
-			"simple": {
-				"limit": 5,
-				"period": 60
-			}
-		}
-	],
-	"triggers": {
-		"crons": [
-			"* * * * *"
-		]
-	}
+    "$schema": "./node_modules/wrangler/config-schema.json",
+    "name": "corex-server-v3",
+    "main": "main.js",
+    "compatibility_date": "2026-11-06",
+    "compatibility_flags": ["nodejs_compat"],
+    "workers_dev": true,
+
+    "vars": {
+        "PUBLIC_BASE_URL": "https://corex-server-v3.corex-services.workers.dev"
+    },
+
+    "assets": {
+        "directory": "./public",
+        "binding": "ASSETS",
+        "run_worker_first": [
+            "/",
+            "/index.html",
+            "/dashboard.html",
+            "/login.html",
+            "/api/*",
+            "/auth/*"
+        ]
+    },
+    "d1_databases": [
+        {
+            "binding": "DB",
+            "database_name": "corex-db-v3-production",
+            "database_id": "7083f2f9-f960-4fba-8e23-916f040818f4",
+            "migrations_dir": "db/migrations"
+        }
+    ],
+    "ratelimits": [
+        {
+            "name": "AUTH_SESSION_LIMITER",
+            "namespace_id": "68422101",
+            "simple": { "limit": 10, "period": 60 }
+        },
+        {
+            "name": "AUTH_POLL_LIMITER",
+            "namespace_id": "68422104",
+            "simple": { "limit": 120, "period": 60 }
+        },
+        {
+            "name": "CALLBACK_LIMITER",
+            "namespace_id": "68422102",
+            "simple": { "limit": 120, "period": 60 }
+        },
+        {
+            "name": "ADMIN_LOGIN_LIMITER",
+            "namespace_id": "68422103",
+            "simple": { "limit": 5, "period": 60 }
+        },
+        {
+            "name": "ADMIN_CLIENT_CREATE_LIMITER",
+            "namespace_id": "68422105",
+            "simple": { "limit": 5, "period": 60 }
+        }
+    ],
+    "triggers": {
+        "crons": ["* * * * *"]
+    }
 }
